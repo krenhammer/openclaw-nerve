@@ -50,31 +50,47 @@ export function AddMemoryDialog({ open, onOpenChange, onAdd, sections = [], isLo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!open && !submitting) {
+      setText('');
+      setSection('');
+      setSectionDropdownOpen(false);
+    }
+  }, [open, submitting]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim() || submitting) return;
 
     setSubmitting(true);
-    const success = await onAdd(text.trim(), section.trim() || 'General');
-    setSubmitting(false);
-
-    if (success) {
-      setText('');
-      setSection('');
-      onOpenChange(false);
+    try {
+      const success = await onAdd(text.trim(), section.trim() || 'General');
+      if (success) {
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error('[AddMemoryDialog] Failed to add memory:', error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleClose = () => {
     if (!submitting) {
-      setText('');
-      setSection('');
       onOpenChange(false);
     }
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true);
+      return;
+    }
+    handleClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg overflow-visible">
         <DialogHeader>
           <div className="cockpit-kicker">

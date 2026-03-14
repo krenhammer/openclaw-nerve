@@ -81,8 +81,12 @@ export function ConfirmDeleteDialog({
   }, [open, isSection, isDaily, memoryText, memoryDate]);
 
   const handleConfirm = async () => {
-    await onConfirm();
-    onOpenChange(false);
+    try {
+      await onConfirm();
+      onOpenChange(false);
+    } catch (error) {
+      console.error('[ConfirmDeleteDialog] Failed to delete memory:', error);
+    }
   };
 
   const handleCancel = () => {
@@ -91,13 +95,21 @@ export function ConfirmDeleteDialog({
     }
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true);
+      return;
+    }
+    handleCancel();
+  };
+
   // Truncate long memory text for display
   const displayText = memoryText.length > 100 
     ? memoryText.slice(0, 100) + '...' 
     : memoryText;
 
   return (
-    <Dialog open={open} onOpenChange={handleCancel}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <div className="cockpit-kicker text-destructive">

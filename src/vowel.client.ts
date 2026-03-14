@@ -102,8 +102,8 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - openWorkspacePanel: Open the workspace panel (mobile compact layout)
 - switchWorkspaceTab: Navigate to a workspace tab: 'memory', 'crons', 'config', or 'kanban'
 - switchConfigView: When on config tab, switch between 'files' and 'skills' sub-views
-- openAddMemoryDialog: Open the dialog to add a new memory (when user says "add a memory" without content)
-- addMemory: Add a memory with text (optional section) — use when user provides the memory content
+- openAddMemoryDialog: Open the add-memory dialog. Use when user wants to add a memory but has NOT yet stated what to remember.
+- addMemory: Add a memory with text (optional section) — use ONLY when user provides the memory content in the same utterance
 - addTask: Create a kanban task with title (optional description)
 - openAddCronDialog: Open the dialog to add a new cron job
 - summarizeChat: Ask the agent to summarize the current conversation
@@ -117,12 +117,15 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - To add an agent: Use openSpawnAgent
 - To open settings: Use openSettings
 - To show workspace: Use openWorkspacePanel (mobile) or switchWorkspaceTab to navigate tabs
-- To add memory: Use openAddMemoryDialog when user says "add a memory" without content; use addMemory with text when they provide the content
+- To add memory: Use openAddMemoryDialog when user says "add a memory", "I would like to add memory", "I want to add a memory", etc. without stating what to remember; use addMemory only when they say the content (e.g. "remember that X")
 - To add task: Use addTask with title and optional description
 - To add cron: Use openAddCronDialog
 - To summarize: Use summarizeChat
 - To close any dialog: Use closeDialog (when user says "close", "cancel", "never mind")
 - **DO NOT use DOM manipulation** unless explicitly required by user
+
+## Memory — CRITICAL
+When the user expresses intent to add a memory (e.g. "add a memory", "I would like to add memory", "I want to add a memory", "add memory", "let me add a memory") but does NOT state the actual content to remember → call openAddMemoryDialog IMMEDIATELY. Do NOT ask "what would you like to remember?" — open the dialog so they can type it. Only use addMemory when the user explicitly states the memory content in the same utterance (e.g. "remember that my favorite color is blue").
 
 When the user speaks to you, respond conversationally and help them interact with the vowel | Nerve application.`,
     
@@ -308,15 +311,27 @@ function registerCustomActions(vowel: Vowel) {
     return { success: true, message: `Switched to ${view} view` };
   });
 
+  /** Shared helper to open the add-memory dialog (used by openAddMemoryDialog and addMemory fallback). */
+  function dispatchOpenAddMemoryDialog() {
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_PANEL, { detail: { panel: 'workspace' } }));
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, { detail: { tab: 'memory' } }));
+    // Fire OPEN_ADD_MEMORY at intervals so we catch MemoryList after it mounts (lazy load on compact)
+    [100, 300, 600].forEach((ms) => {
+      setTimeout(() => window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_ADD_MEMORY)), ms);
+    });
+  }
+
   vowel.registerAction('addMemory', {
-    description: 'Add a memory with the given text. Optionally specify a section.',
+    description: 'Add a memory with the given text. Optionally specify a section. If no text provided, opens the add-memory dialog instead.',
     parameters: {
       text: { type: 'string', description: 'The memory content to add' },
       section: { type: 'string', description: 'Optional section name to place the memory under' }
     }
   }, async ({ text, section }) => {
     if (!text || typeof text !== 'string' || !text.trim()) {
-      return { success: false, error: 'Memory text is required' };
+      console.log('[Vowel] addMemory called without text → opening add-memory dialog');
+      dispatchOpenAddMemoryDialog();
+      return { success: true, message: 'Opened add memory dialog' };
     }
     try {
       const res = await fetch('/api/memories', {
@@ -371,16 +386,11 @@ function registerCustomActions(vowel: Vowel) {
   });
 
   vowel.registerAction('openAddMemoryDialog', {
-    description: 'Open the dialog to add a new memory. Use when user says "add a memory" without providing the content.',
+    description: 'Open the add-memory dialog. Call this when user says they want to add a memory (e.g. "add a memory", "I would like to add memory", "I want to add memory") but has NOT stated what to remember. Do NOT ask follow-up questions — open the dialog.',
     parameters: {}
   }, async () => {
-    // Ensure workspace panel is open and memory tab is active so the dialog is visible
-    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_PANEL, { detail: { panel: 'workspace' } }));
-    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, { detail: { tab: 'memory' } }));
-    // Defer so MemoryList mounts before we open the dialog
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_ADD_MEMORY));
-    });
+    console.log('[Vowel] openAddMemoryDialog called');
+    dispatchOpenAddMemoryDialog();
     return { success: true, message: 'Opened add memory dialog' };
   });
 

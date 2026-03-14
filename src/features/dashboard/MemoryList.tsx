@@ -185,7 +185,10 @@ export function MemoryList({ memories: initialMemories, onRefresh, isLoading: in
 
   // Listen for Vowel-triggered open add memory dialog
   useEffect(() => {
-    const handler = () => openAddDialog();
+    const handler = () => {
+      console.log('[MemoryList] OPEN_ADD_MEMORY received, opening dialog');
+      openAddDialog();
+    };
     window.addEventListener(NERVE_EVENTS.OPEN_ADD_MEMORY, handler);
     return () => window.removeEventListener(NERVE_EVENTS.OPEN_ADD_MEMORY, handler);
   }, [openAddDialog]);
