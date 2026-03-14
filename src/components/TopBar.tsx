@@ -23,6 +23,7 @@ import { NERVE_EVENTS } from "@/lib/constants";
 import type { AgentLogEntry, EventEntry, TokenData } from "@/types";
 import VowelLogo from "./VowelLogo";
 import LoadingLogo from "./LoadingLogo";
+import { TopBarVowelMic } from "./TopBarVowelMic";
 
 const AgentLog = lazy(() =>
   import("@/features/activity/AgentLog").then((m) => ({ default: m.AgentLog })),
@@ -401,6 +402,9 @@ export function TopBar({
               )}
             </button>
           )}
+
+          {/* Vowel mic button - round square, icon changes by state (MicOff/Loader2/Wrench/Brain/Volume2/Mic) */}
+          <TopBarVowelMic />
 
           {/* Usage button */}
           <button

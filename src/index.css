@@ -1387,13 +1387,24 @@
   flex-shrink: 0;
 }
 
+/** Vowel mic button – subtle glow when inactive (disconnected) */
+@keyframes vowel-mic-glow {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 35%, transparent); }
+  50% { box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 50%, transparent); }
+}
+
+.vowel-mic-inactive-glow {
+  animation: vowel-mic-glow 2s ease-in-out infinite;
+}
+
 /* Respect user preference for reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-spin,
   .animate-pulse,
   .animate-pulse-dot,
   .animate-blink,
-  .animate-alive {
+  .animate-alive,
+  .vowel-mic-inactive-glow {
     animation: none !important;
   }
 

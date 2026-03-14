@@ -137,7 +137,7 @@ When the user speaks to you, respond conversationally and help them interact wit
       position: 'top-center',
       maxWidth: '600px',
       showRole: true,
-      showOnMobile: false
+      showOnMobile: true
     },
     
     voiceConfig: {

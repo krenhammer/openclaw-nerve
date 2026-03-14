@@ -31,7 +31,8 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { SpawnAgentDialog } from '@/features/sessions/SpawnAgentDialog';
 import { FileTreePanel, TabbedContentArea, useOpenFiles } from '@/features/file-browser';
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
-import { VowelProvider, VowelAgent } from '@vowel.to/client/react';
+import { VowelProvider } from '@vowel.to/client/react';
+import { VowelCaption } from '@/components/VowelCaption';
 import { initializeVowel, clearVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, setOpenSpawnAgentHandler, setOpenSettingsHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
 import { VOWEL_APP_ID_STORAGE_KEY, NERVE_EVENTS } from '@/lib/constants';
 
@@ -572,7 +573,8 @@ export default function App({ onLogout }: AppProps) {
 
   return (
     <VowelProvider client={vowelClient}>
-      <VowelAgent position="bottom-right" enableFloatingCursor={false} />
+      {/* Vowel captions – real-time speech transcripts when voice session is active */}
+      <VowelCaption position="top-center" maxWidth="600px" />
       <div className="scan-lines relative h-screen flex flex-col overflow-hidden" data-booted={booted}>
       {/* Skip to main content link for keyboard navigation */}
       <a 
