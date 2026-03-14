@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 const TAU = Math.PI * 2;
+const VIEWBOX_SIZE = 100;
+const CANVAS_PADDING = 2;
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 function easeOut(t: number) { return 1 - Math.pow(1 - t, 3); }
 function ease(t: number) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2; }
@@ -87,22 +89,24 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 2;
-    const PAD = 2.0; // 2x padding so glow never clips at canvas edge
-    const pxSize = size * dpr * PAD;
+    const paddedCssSize = size * CANVAS_PADDING;
+    const bleedCss = (paddedCssSize - size) / 2;
+    const pxSize = paddedCssSize * dpr;
+    const scale = (size * dpr) / VIEWBOX_SIZE;
+
     canvas.width = pxSize;
     canvas.height = pxSize;
-    canvas.style.width = `${size * PAD}px`;
-    canvas.style.height = `${size * PAD}px`;
-    canvas.style.margin = `${-size * (PAD - 1) / 2}px`; // negative margin to keep layout tight
+    canvas.style.width = `${paddedCssSize}px`;
+    canvas.style.height = `${paddedCssSize}px`;
 
     const W = pxSize;
-    const S = W / (size * PAD);
-    const cx = W / 2;
-    const cy = W / 2;
+    const cx = VIEWBOX_SIZE / 2;
+    const cy = VIEWBOX_SIZE / 2;
+    const S = scale;
 
     // Respect prefers-reduced-motion: render a single static frame
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const R = size * 0.31 * S;
+    const R = VIEWBOX_SIZE * 0.31;
     const CYCLE = 4.2;
 
     const center = { x: cx, y: cy, glow: 0 };
@@ -123,7 +127,9 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
     function animate(time: number) {
       if (!ctx) return;
       const t = (time / 1000) % CYCLE;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, W);
+      ctx.setTransform(scale, 0, 0, scale, bleedCss * dpr, bleedCss * dpr);
 
       // Static structure
       outer.forEach(n => dimLine(ctx, cx, cy, n.x, n.y, 1.5 * S));
@@ -253,5 +259,29 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
     };
   }, [size]);
 
-  return <canvas ref={canvasRef} role="img" aria-label="Nerve logo" style={{ display: 'block' }} />;
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        position: 'relative',
+        overflow: 'visible',
+        flexShrink: 0,
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label="Nerve logo"
+        style={{
+          display: 'block',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
 }
