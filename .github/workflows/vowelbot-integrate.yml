@@ -1,0 +1,513 @@
+name: "vowelbot: Integrate vowel client SDK"
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'vowelbot command (e.g., integrate, add voice agent)'
+        required: true
+        type: string
+      target_repo:
+        description: 'Target repo (owner/repo) for PR — set during onboarding'
+        required: false
+        type: string
+      session_id:
+        description: 'Session ID for progress callback'
+        required: false
+        type: string
+      callback_url:
+        description: 'Workflow completion callback URL (onboarding only)'
+        required: false
+        type: string
+      callback_token:
+        description: 'Workflow callback token (onboarding only)'
+        required: false
+        type: string
+      preferred_free_model:
+        description: 'Preferred OpenCode free model id (onboarding only)'
+        required: false
+        type: string
+      provider:
+        description: 'LLM provider'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - anthropic
+          - openai
+          - groq
+          - opencode
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  vowelbot:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
+        startsWith(github.event.comment.body, '/vowelbot') &&
+        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      ) ||
+      (
+        github.event_name == 'pull_request_review' &&
+        startsWith(github.event.review.body, '/vowelbot') &&
+        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)
+      )
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+          token: ${{ github.token }}
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "vowelbot"
+          git config --global user.email "vowelbot@vowel.to"
+
+      - name: Detect package manager
+        id: package_manager
+        run: |
+          if [ -f "bun.lockb" ] || [ -f "bun.lock" ]; then
+            echo "name=bun" >> "$GITHUB_OUTPUT"
+            echo "install_cmd=bun add" >> "$GITHUB_OUTPUT"
+            echo "Detected bun lockfile"
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "name=pnpm" >> "$GITHUB_OUTPUT"
+            echo "install_cmd=pnpm add" >> "$GITHUB_OUTPUT"
+            echo "Detected pnpm lockfile"
+          elif [ -f "yarn.lock" ]; then
+            echo "name=yarn" >> "$GITHUB_OUTPUT"
+            echo "install_cmd=yarn add" >> "$GITHUB_OUTPUT"
+            echo "Detected yarn lockfile"
+          elif [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
+            echo "name=npm" >> "$GITHUB_OUTPUT"
+            echo "install_cmd=npm install" >> "$GITHUB_OUTPUT"
+            echo "Detected npm lockfile"
+          else
+            echo "name=bun" >> "$GITHUB_OUTPUT"
+            echo "install_cmd=bun add" >> "$GITHUB_OUTPUT"
+            echo "No lockfile detected; defaulting to bun"
+          fi
+
+      - name: Ensure Bun is available
+        if: steps.package_manager.outputs.name == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Check project compatibility
+        run: |
+          # Check for unsupported project types
+          if [ -f "Podfile" ] || [ -f "Package.swift" ] || [ -f "pubspec.yaml" ] || [ -f "Cargo.toml" ]; then
+            echo "::error::This project doesn't appear to be compatible with the vowel client. Vowel currently supports React, vanilla JavaScript, and Web Components (web projects only)."
+            exit 1
+          fi
+          echo "Project compatibility check passed"
+
+      - name: Resolve command prompt
+        id: command
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            PROMPT="${{ github.event.inputs.prompt }}"
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request_review" ]; then
+            BODY="${{ github.event.review.body }}"
+            BODY="${BODY#"/vowelbot"}"
+            BODY="$(echo "$BODY" | sed -E 's/^[[:space:]]+//')"
+            if [ -z "$BODY" ]; then
+              PROMPT="integrate"
+            else
+              PROMPT="$BODY"
+            fi
+          else
+            BODY="${{ github.event.comment.body }}"
+            BODY="${BODY#"/vowelbot"}"
+            BODY="$(echo "$BODY" | sed -E 's/^[[:space:]]+//')"
+            if [ -z "$BODY" ]; then
+              PROMPT="integrate"
+            else
+              PROMPT="$BODY"
+            fi
+          fi
+          PROMPT="$(printf '%s' "$PROMPT" | tr '\r\n' ' ' | sed -E 's/[[:space:]]+/ /g' | cut -c1-500)"
+          printf "prompt=%s\n" "$PROMPT" >> "$GITHUB_OUTPUT"
+          echo "Resolved prompt: $PROMPT"
+
+      - name: Collect PR discussion context
+        id: pr_context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=""
+          if [ "${GITHUB_EVENT_NAME}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request.url }}" ]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request_review_comment" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request_review" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR context for this event."
+            echo "pr_context_b64=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          REPO="${GITHUB_REPOSITORY}"
+          ISSUE_COMMENTS_URL="https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments?per_page=30"
+          REVIEW_COMMENTS_URL="https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/comments?per_page=30"
+
+          ISSUE_JSON="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$ISSUE_COMMENTS_URL")"
+          REVIEW_JSON="$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$REVIEW_COMMENTS_URL")"
+
+          ISSUE_JSON="$ISSUE_JSON" REVIEW_JSON="$REVIEW_JSON" PR_NUMBER="$PR_NUMBER" python3 <<'PY' > .vowelbot-pr-context.txt
+          import json
+          import os
+
+          pr_number = os.environ.get("PR_NUMBER", "")
+          issue = json.loads(os.environ.get("ISSUE_JSON", "[]") or "[]")
+          review = json.loads(os.environ.get("REVIEW_JSON", "[]") or "[]")
+
+          print(f"PR #{pr_number} discussion context")
+          print()
+          print("Issue comments:")
+          for item in issue:
+              user = (item.get("user") or {}).get("login", "unknown")
+              body = (item.get("body") or "").replace("\r", " ").replace("\n", " ").strip()
+              if body:
+                  print(f"- [{user}] {body}")
+
+          print()
+          print("Review comments:")
+          for item in review:
+              user = (item.get("user") or {}).get("login", "unknown")
+              path = item.get("path") or "unknown"
+              line = item.get("line") if item.get("line") is not None else 0
+              body = (item.get("body") or "").replace("\r", " ").replace("\n", " ").strip()
+              if body:
+                  print(f"- [{user}] ({path}:{line}) {body}")
+          PY
+
+          CONTEXT="$(cat .vowelbot-pr-context.txt)"
+          if [ -n "$CONTEXT" ]; then
+            echo "pr_context_b64=$(printf '%s' "$CONTEXT" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_context_b64=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve model and verify secrets
+        id: resolve
+        run: |
+          # OpenCode free models - no API key required
+          # Priority: API-key providers > OpenCode provider
+
+          # Check if user specified a provider override
+          INPUT_PROVIDER="${{ github.event.inputs.provider }}"
+          if [ "$INPUT_PROVIDER" != "auto" ] && [ -n "$INPUT_PROVIDER" ]; then
+            # User specified a provider - use it
+            case "$INPUT_PROVIDER" in
+              anthropic)
+                if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+                  echo "provider=anthropic" >> $GITHUB_OUTPUT
+                  echo "model=anthropic/claude-sonnet-4-20250514" >> $GITHUB_OUTPUT
+                  echo "Using Anthropic Claude (user override)"
+                  exit 0
+                fi
+                echo "::warning::ANTHROPIC_API_KEY not set. Falling back to free models."
+                ;;
+              openai)
+                if [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+                  echo "provider=openai" >> $GITHUB_OUTPUT
+                  echo "model=openai/gpt-4o" >> $GITHUB_OUTPUT
+                  echo "Using OpenAI GPT-4o (user override)"
+                  exit 0
+                fi
+                echo "::warning::OPENAI_API_KEY not set. Falling back to free models."
+                ;;
+              groq)
+                if [ -n "${{ secrets.GROQ_API_KEY }}" ]; then
+                  echo "provider=groq" >> $GITHUB_OUTPUT
+                  echo "model=groq/llama-3.3-70b-versatile" >> $GITHUB_OUTPUT
+                  echo "Using Groq Llama (user override)"
+                  exit 0
+                fi
+                echo "::warning::GROQ_API_KEY not set. Falling back to free models."
+                ;;
+              opencode)
+                FREE_MODEL="${{ github.event.inputs.preferred_free_model }}"
+                if [ -z "$FREE_MODEL" ]; then
+                  FREE_MODEL="opencode/minimax-m2.5-free"
+                fi
+                # User explicitly wants OpenCode - use free model
+                echo "provider=opencode" >> $GITHUB_OUTPUT
+                echo "model=${FREE_MODEL}" >> $GITHUB_OUTPUT
+                echo "Using OpenCode free model (user override)"
+                exit 0
+                ;;
+            esac
+          fi
+          
+          # Try API-key providers first if keys are available
+          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "provider=anthropic" >> $GITHUB_OUTPUT
+            echo "model=anthropic/claude-sonnet-4-20250514" >> $GITHUB_OUTPUT
+            echo "Using Anthropic Claude (API key available)"
+            exit 0
+          elif [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "provider=openai" >> $GITHUB_OUTPUT
+            echo "model=openai/gpt-4o" >> $GITHUB_OUTPUT
+            echo "Using OpenAI GPT-4o (API key available)"
+            exit 0
+          elif [ -n "${{ secrets.GROQ_API_KEY }}" ]; then
+            echo "provider=groq" >> $GITHUB_OUTPUT
+            echo "model=groq/llama-3.3-70b-versatile" >> $GITHUB_OUTPUT
+            echo "Using Groq Llama (API key available)"
+            exit 0
+          elif [ -n "${{ secrets.OPENCODE_API_KEY }}" ]; then
+            # User has OpenCode Zen API key - use paid models with their credits
+            echo "provider=opencode" >> $GITHUB_OUTPUT
+            echo "model=opencode/claude-3-5-sonnet" >> $GITHUB_OUTPUT
+            echo "Using OpenCode Claude 3.5 Sonnet (OPENCODE_API_KEY detected - using paid tier)"
+            exit 0
+          fi
+
+          FREE_MODEL="${{ github.event.inputs.preferred_free_model }}"
+          if [ -z "$FREE_MODEL" ]; then
+            FREE_MODEL="opencode/minimax-m2.5-free"
+          fi
+
+          # Use OpenCode model without API keys
+          echo "provider=opencode" >> $GITHUB_OUTPUT
+          echo "model=${FREE_MODEL}" >> $GITHUB_OUTPUT
+          echo "Using OpenCode model: ${FREE_MODEL} (no API key required)"
+          echo "To use a paid provider, add ANTHROPIC_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY as a secret."
+
+      - name: Get opencode version
+        id: opencode_version
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          echo "version=${VERSION:-latest}" >> $GITHUB_OUTPUT
+
+      - name: Cache opencode
+        id: cache_opencode
+        uses: actions/cache@v5
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.opencode_version.outputs.version }}
+
+      - name: Install opencode
+        if: steps.cache_opencode.outputs.cache-hit != 'true'
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add opencode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
+      - name: Install vowel skills in workspace
+        run: |
+          mkdir -p .opencode/skills
+          for skill in vowel-react vowel-vanilla vowel-webcomponent; do
+            if [ ! -f ".vowelbot/skills/${skill}/SKILL.md" ]; then
+              echo "::error::Missing committed skill bundle at .vowelbot/skills/${skill}. Re-sync the vowelbot bootstrap commit so the injected skills are present in the repository."
+              exit 1
+            fi
+            cp -R ".vowelbot/skills/${skill}" ".opencode/skills/${skill}"
+          done
+
+      - name: Run OpenCode CLI
+        env:
+          MODEL: ${{ steps.resolve.outputs.model }}
+          PROMPT: ${{ steps.command.outputs.prompt }}
+          PACKAGE_MANAGER: ${{ steps.package_manager.outputs.name }}
+          PACKAGE_INSTALL_CMD: ${{ steps.package_manager.outputs.install_cmd }}
+          SESSION_ID: ${{ github.event.inputs.session_id }}
+          CALLBACK_URL: ${{ github.event.inputs.callback_url }}
+          CALLBACK_TOKEN: ${{ github.event.inputs.callback_token }}
+          GIT_AUTHOR_NAME: vowelbot
+          GIT_AUTHOR_EMAIL: vowelbot@vowel.to
+          GIT_COMMITTER_NAME: vowelbot
+          GIT_COMMITTER_EMAIL: vowelbot@vowel.to
+          OPENCODE_PERMISSION: '{"bash":"allow","edit":"allow","write":"allow","read":"allow","glob":"allow","grep":"allow","list":"allow","webfetch":"allow","websearch":"allow","todoread":"allow","todowrite":"allow"}'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          PR_CONTEXT=""
+          if [ -n "${{ steps.pr_context.outputs.pr_context_b64 }}" ]; then
+            PR_CONTEXT="$(printf '%s' "${{ steps.pr_context.outputs.pr_context_b64 }}" | base64 -d || true)"
+          fi
+          FULL_PROMPT=$(cat <<EOF
+          ## Discovery phase (do this first, before any implementation)
+
+          Before making any changes, perform a thorough discovery phase to understand the repository and its state:
+
+          1. **Read documentation**
+             - README.md, USAGE.md, CONTRIBUTING.md, and any other root-level docs
+             - User-created plans (e.g., PLAN.md, docs/*.md, .ai/plan/*.md, vowel integration plan, implementation plan)
+             - Any .vowelbot/ or .opencode/ config or notes in the repo
+             - Package.json scripts, dependencies, and project metadata
+
+          2. **Understand app state**
+             - Project type (React, Next.js, TanStack Router, vanilla, etc.) and structure
+             - Existing voice/vowel integrations, if any
+             - Build setup (Vite, webpack, etc.) and entry points
+             - Routing and state management patterns in use
+
+          3. **Review the code**
+             - Key entry files (main.tsx, App.tsx, layout files, router setup)
+             - Existing providers, context, or stores
+             - Patterns that may conflict with or inform the vowel integration
+
+          Only after completing this discovery phase and forming a clear picture of the app should you begin implementation. Do not skip or abbreviate discovery.
+
+          ---
+
+          Available local skills:
+          - .opencode/skills/vowel-react/SKILL.md
+          - .opencode/skills/vowel-vanilla/SKILL.md
+          - .opencode/skills/vowel-webcomponent/SKILL.md
+
+          Choose one primary skill based on the target codebase and user request:
+          - React/Next.js/TanStack Router/React Router: vowel-react
+          - Plain JavaScript (no framework): vowel-vanilla
+          - Drop-in widget via <vowel-voice-widget>: vowel-webcomponent
+
+          Follow the chosen primary skill exactly.
+          Do not default to React. If the repo is non-React, choose vowel-vanilla or vowel-webcomponent and keep implementation non-React.
+          For non-React projects, do not add React-only patterns/files (e.g., VowelProvider, hooks, React context wrappers).
+          React-specific guardrail (only when vowel-react is selected): enforce context-ready initialization with deferred setAppId/client readiness so the mic button can appear. If a root/layout gates rendering on X being ready, ensure the initializer for X is not mounted behind that same gate. Treat this as a startup deadlock risk, verify optional integrations initialize before or outside the gated subtree, fail open on init failure instead of blocking the app, and check hook API usage carefully so setup is not skipped by incorrect assumptions about return values or invocation style (see initialization-context-ready reference).
+          State-driven architecture: write to app stores, NOT DOM. Prefer custom actions over DOM manipulation.
+          Use the repository's package manager for dependency operations:
+          - package manager: ${PACKAGE_MANAGER}
+          - install command: ${PACKAGE_INSTALL_CMD}
+          Do not switch package managers.
+
+          User request: ${PROMPT}
+
+          PR comments/review context (if present):
+          ${PR_CONTEXT}
+
+          Integrate vowel into this repo according to the selected skill. Execute two refinement passes to enhance and improve your implementation (each pass should add value through enhancement, not merely verify correctness). Then conclude.
+          Ensure @ricky0123/vad-web is installed in the target project using the detected package manager.
+          Add an app-specific initialGreetingPrompt in the voice configuration (not a generic placeholder).
+          Enable captions by default in the integration (use _caption.enabled=true for client config patterns, or show-transcripts=true for web component patterns).
+          After implementation, explicitly validate/fix router initialization order issues for React/TanStack setups so this error does not occur:
+          vowel.client.ts:44 Uncaught ReferenceError: Cannot access 'router' before initialization
+          Required fix pattern: define/export router in dedicated router.ts; import that router in both app entry and vowel.client.ts; avoid circular imports among router.ts, main/App, and vowel.client.ts.
+          Also ensure createTanStackAdapters(...) is not executed at module top-level in vowel.client.ts; create adapters inside createVowelClient() (or equivalent client factory) after router import is initialized.
+          Before concluding, run a full build for the target repo/workspace to verify the app still builds end-to-end after your changes.
+          If the build fails, fix the issues and rebuild. If still blocked, report the exact failing command and error in your final notes.
+          In your todo list, include the names of each vowel custom action you register (e.g., addToCart, searchProducts).
+          If there are implementation-specific notes for reviewers, write PR metadata files:
+          - .vowelbot/pr-title.txt (single-line PR title, optional)
+          - .vowelbot/pr-body.md (markdown PR body, optional)
+          Keep these files concise and focused on what changed and any caveats.
+          EOF
+          )
+          set -o pipefail
+          LOG_URL="${CALLBACK_URL%/workflow-done}/workflow-log"
+          opencode run -m "$MODEL" "$FULL_PROMPT" 2>&1 | while IFS= read -r line; do
+            printf '%s\n' "$line"
+            if [ -n "$SESSION_ID" ] && [ -n "$CALLBACK_URL" ] && [ -n "$CALLBACK_TOKEN" ]; then
+              curl -sS -X POST "$LOG_URL" \
+                -H "Content-Type: text/plain" \
+                -H "X-Vowelbot-Session: $SESSION_ID" \
+                -H "X-Vowelbot-Callback-Token: $CALLBACK_TOKEN" \
+                --data-binary "$line" > /dev/null || true
+            fi
+          done
+          opencode_status=${PIPESTATUS[0]}
+          exit "$opencode_status"
+
+      - name: Collect PR metadata from OpenCode output
+        id: pr_metadata
+        run: |
+          PR_TITLE=""
+          PR_BODY=""
+
+          if [ -f ".vowelbot/pr-title.txt" ]; then
+            PR_TITLE="$(head -n 1 .vowelbot/pr-title.txt | tr -d '\r')"
+          fi
+
+          if [ -f ".vowelbot/pr-body.md" ]; then
+            PR_BODY="$(cat .vowelbot/pr-body.md)"
+          fi
+
+          if [ -n "$PR_TITLE" ]; then
+            echo "pr_title_b64=$(printf '%s' "$PR_TITLE" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_title_b64=" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$PR_BODY" ]; then
+            echo "pr_body_b64=$(printf '%s' "$PR_BODY" | base64 -w 0)" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_body_b64=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cleanup local agent metadata files
+        run: |
+          rm -rf .opencode
+          rm -f .vowelbot/pr-title.txt .vowelbot/pr-body.md
+
+      - name: Commit and push OpenCode changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No changes produced by OpenCode."
+            exit 0
+          fi
+          git config user.name "vowelbot[bot]"
+          git config user.email "noreply@vowel.to"
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git commit \
+            -m "feat(vowel): integrate voice client" \
+            -m "Generated by vowelbot via OpenCode on branch ${GITHUB_REF_NAME}." \
+            -m "Co-authored-by: vowelbot[bot] <noreply@vowel.to>"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Notify workflow success
+        if: success() && github.event.inputs.session_id != '' && github.event.inputs.callback_url != ''
+        run: |
+          curl -X POST "${{ github.event.inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "session_id": "${{ github.event.inputs.session_id }}",
+              "branch": "${{ github.ref_name }}",
+              "target_repo": "${{ github.event.inputs.target_repo }}",
+              "status": "success",
+              "pr_title_b64": "${{ steps.pr_metadata.outputs.pr_title_b64 }}",
+              "pr_body_b64": "${{ steps.pr_metadata.outputs.pr_body_b64 }}",
+              "callback_token": "${{ github.event.inputs.callback_token }}"
+            }'
+
+      - name: Notify workflow failure
+        if: failure() && github.event.inputs.session_id != '' && github.event.inputs.callback_url != ''
+        run: |
+          curl -X POST "${{ github.event.inputs.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "session_id": "${{ github.event.inputs.session_id }}",
+              "branch": "${{ github.ref_name }}",
+              "target_repo": "${{ github.event.inputs.target_repo }}",
+              "status": "failure",
+              "callback_token": "${{ github.event.inputs.callback_token }}",
+              "message": "Integration workflow failed. Open the Actions run logs for details."
+            }'
