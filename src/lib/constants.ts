@@ -17,6 +17,22 @@ export const DEFAULT_GATEWAY_WS = 'ws://127.0.0.1:18789';
 /** localStorage key for Vowel App ID (runtime override of VITE_VOWEL_APP_ID). */
 export const VOWEL_APP_ID_STORAGE_KEY = 'nerve:vowel-app-id';
 
+/** Custom event names for Vowel voice actions and cross-component coordination. */
+export const NERVE_EVENTS = {
+  /** Open a TopBar panel (detail: { panel: 'workspace' | 'sessions' | 'agent-log' | 'usage' | 'events' }). */
+  OPEN_PANEL: 'nerve:open-panel',
+  /** Switch workspace tab (detail: { tab: 'memory' | 'crons' | 'config' | 'kanban' }). */
+  WORKSPACE_TAB_CHANGE: 'nerve:workspace-tab-change',
+  /** Switch config sub-view (detail: { view: 'files' | 'skills' }). */
+  CONFIG_VIEW_CHANGE: 'nerve:config-view-change',
+  /** Open the add-cron dialog. */
+  OPEN_ADD_CRON: 'nerve:open-add-cron',
+  /** Trigger memory list refresh (after add/delete). */
+  REFRESH_MEMORIES: 'nerve:refresh-memories',
+  /** Trigger kanban refresh (after add task). */
+  REFRESH_KANBAN: 'nerve:refresh-kanban',
+} as const;
+
 /** Escape special regex characters for safe use in RegExp constructors */
 export function escapeRegex(input: string): string {
   if (!input) return '';

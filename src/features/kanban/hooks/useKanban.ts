@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { NERVE_EVENTS } from '@/lib/constants';
 import type { KanbanTask, TaskStatus, TaskPriority } from '../types';
 
 /* ── API response shape ── */
@@ -104,6 +105,13 @@ export function useKanban() {
   useEffect(() => {
     const id = setInterval(() => fetchTasks(undefined, { silent: true }), 5_000);
     return () => clearInterval(id);
+  }, [fetchTasks]);
+
+  /* Listen for Vowel-triggered kanban refresh (e.g. after addTask action) */
+  useEffect(() => {
+    const handler = () => fetchTasks(undefined, { silent: true });
+    window.addEventListener(NERVE_EVENTS.REFRESH_KANBAN, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.REFRESH_KANBAN, handler);
   }, [fetchTasks]);
 
   /* ── Mutations ── */

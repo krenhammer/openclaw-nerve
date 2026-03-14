@@ -19,6 +19,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import type { ViewMode } from "@/features/command-palette/commands";
+import { NERVE_EVENTS } from "@/lib/constants";
 import type { AgentLogEntry, EventEntry, TokenData } from "@/types";
 import VowelLogo from "./VowelLogo";
 import LoadingLogo from "./LoadingLogo";
@@ -160,6 +161,18 @@ export function TopBar({
     ],
   );
 
+  // Listen for Vowel-triggered panel open (e.g. openWorkspacePanel action)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ panel?: PanelId }>).detail;
+      if (detail?.panel && isPanelAvailable(detail.panel)) {
+        setActivePanel(detail.panel);
+      }
+    };
+    window.addEventListener(NERVE_EVENTS.OPEN_PANEL, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.OPEN_PANEL, handler);
+  }, [isPanelAvailable]);
+
   const visiblePanel = useMemo<PanelId>(() => {
     if (!activePanel) return null;
     return isPanelAvailable(activePanel) ? activePanel : null;
@@ -238,7 +251,7 @@ export function TopBar({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold tracking-[0.34em] text-primary sm:text-base">
+              <span className="truncate text-sm tracking-[0.34em] text-primary sm:text-base">
                 <a
                   href="https://vowel.to"
                   target="_blank"
@@ -252,7 +265,7 @@ export function TopBar({
                   href="https://nerve.zone"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="uppercase no-underline text-inherit hover:text-primary"
+                  className="no-underline text-inherit hover:text-primary"
                 >
                   nerve
                 </a>
@@ -264,11 +277,19 @@ export function TopBar({
                 href="https://openclaw.ai/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="no-underline text-inherit hover:text-muted-foreground"
+                className=" text-inherit hover:text-primary"
               >
                 OpenClaw
               </a>{" "}
-              powered by NERVE
+              powered by {" "}
+              <a
+                  href="https://nerve.zone"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className=" text-inherit hover:text-primary"
+                >
+                  NERVE
+                </a>
             </div>
           </div>
         </div>

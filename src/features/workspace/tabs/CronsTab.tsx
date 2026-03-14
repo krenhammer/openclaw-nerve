@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { NERVE_EVENTS } from '@/lib/constants';
 import { RefreshCw, Play, Plus, Trash2, Pencil, ChevronDown, ChevronRight, CheckCircle, XCircle, AlertTriangle, Circle, Loader2 } from 'lucide-react';
 import { useCrons, type CronJob, type CronRun } from '../hooks/useCrons';
 import { CronDialog } from './CronDialog';
@@ -262,6 +263,13 @@ export function CronsTab() {
     setEditingJob(null);
     setDialogOpen(true);
   }, []);
+
+  // Listen for Vowel-triggered open add cron dialog
+  useEffect(() => {
+    const handler = () => handleAdd();
+    window.addEventListener(NERVE_EVENTS.OPEN_ADD_CRON, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.OPEN_ADD_CRON, handler);
+  }, [handleAdd]);
 
   const handleEdit = useCallback((job: CronJob) => {
     setDialogMode('edit');

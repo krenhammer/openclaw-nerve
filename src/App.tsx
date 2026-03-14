@@ -32,8 +32,8 @@ import { SpawnAgentDialog } from '@/features/sessions/SpawnAgentDialog';
 import { FileTreePanel, TabbedContentArea, useOpenFiles } from '@/features/file-browser';
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
 import { VowelProvider, VowelAgent } from '@vowel.to/client/react';
-import { initializeVowel, clearVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
-import { VOWEL_APP_ID_STORAGE_KEY } from '@/lib/constants';
+import { initializeVowel, clearVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, setOpenSpawnAgentHandler, setOpenSettingsHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
+import { VOWEL_APP_ID_STORAGE_KEY, NERVE_EVENTS } from '@/lib/constants';
 
 // Lazy-loaded features (not needed in initial bundle)
 const SettingsDrawer = lazy(() => import('@/features/settings/SettingsDrawer').then(m => ({ default: m.SettingsDrawer })));
@@ -316,7 +316,9 @@ export default function App({ onLogout }: AppProps) {
     setResetHandler(() => {
       handleReset();
     });
-  }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled, handleSend, handleAbort, handleReset, setViewMode]);
+    setOpenSpawnAgentHandler(openSpawnDialog);
+    setOpenSettingsHandler(openSettings);
+  }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled, handleSend, handleAbort, handleReset, setViewMode, openSpawnDialog, openSettings]);
 
   // Initialize vowel client (appId from localStorage or env)
   useEffect(() => {
@@ -354,6 +356,13 @@ export default function App({ onLogout }: AppProps) {
   useEffect(() => {
     updateVowelContext();
   }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled]);
+
+  // Listen for Vowel-triggered memory refresh (e.g. after addMemory action)
+  useEffect(() => {
+    const handler = () => refreshMemories();
+    window.addEventListener(NERVE_EVENTS.REFRESH_MEMORIES, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.REFRESH_MEMORIES, handler);
+  }, [refreshMemories]);
 
   // Get current session's context usage for StatusBar
   const currentSessionData = useMemo(() => {

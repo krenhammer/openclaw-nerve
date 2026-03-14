@@ -5,8 +5,9 @@
  * Tab action buttons (add, refresh) render in the tab bar header.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { WorkspaceTabs, type TabId } from './WorkspaceTabs';
+import { NERVE_EVENTS } from '@/lib/constants';
 import { MemoryTab, CronsTab, ConfigTab, SkillsTab } from './tabs';
 import { useCrons } from './hooks/useCrons';
 import { KanbanQuickView } from '@/features/kanban';
@@ -28,6 +29,18 @@ function ConfigWithSkills() {
     setView(v);
     try { localStorage.setItem(CONFIG_VIEW_KEY, v); } catch { /* ignore */ }
   }, []);
+
+  // Listen for Vowel-triggered config view change
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ view?: 'files' | 'skills' }>).detail;
+      if (detail?.view && (detail.view === 'files' || detail.view === 'skills')) {
+        switchView(detail.view);
+      }
+    };
+    window.addEventListener(NERVE_EVENTS.CONFIG_VIEW_CHANGE, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CONFIG_VIEW_CHANGE, handler);
+  }, [switchView]);
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -95,6 +108,18 @@ export function WorkspacePanel({ memories, onRefreshMemories, memoriesLoading, c
       localStorage.setItem(STORAGE_KEY, tab);
     } catch { /* ignore */ }
   }, []);
+
+  // Listen for Vowel-triggered workspace tab change
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ tab?: TabId }>).detail;
+      if (detail?.tab && ['memory', 'crons', 'config', 'kanban'].includes(detail.tab)) {
+        handleTabChange(detail.tab as TabId);
+      }
+    };
+    window.addEventListener(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, handler);
+  }, [handleTabChange]);
 
   return (
     <div className={compact ? 'h-[70vh] max-h-[70vh] flex flex-col min-h-0' : 'h-full flex flex-col min-h-0'}>

@@ -1,4 +1,5 @@
 import { Vowel } from '@vowel.to/client';
+import { NERVE_EVENTS } from '@/lib/constants';
 
 export type ViewMode = 'chat' | 'kanban';
 
@@ -19,6 +20,8 @@ let viewModeSetter: ((mode: ViewMode) => void) | null = null;
 let sendMessageHandler: ((text: string) => Promise<void>) | null = null;
 let abortHandler: (() => Promise<void>) | null = null;
 let resetHandler: (() => void) | null = null;
+let openSpawnAgentHandler: (() => void) | null = null;
+let openSettingsHandler: (() => void) | null = null;
 
 type VowelChangeListener = (client: Vowel | null) => void;
 const vowelChangeListeners = new Set<VowelChangeListener>();
@@ -41,6 +44,14 @@ export function setAbortHandler(handler: () => Promise<void>) {
 
 export function setResetHandler(handler: () => void) {
   resetHandler = handler;
+}
+
+export function setOpenSpawnAgentHandler(handler: () => void) {
+  openSpawnAgentHandler = handler;
+}
+
+export function setOpenSettingsHandler(handler: () => void) {
+  openSettingsHandler = handler;
 }
 
 function buildVowelContext(): Record<string, unknown> {
@@ -86,12 +97,28 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - switchView: Switch between 'chat' and 'kanban' views
 - abortGeneration: Abort the currently running agent generation
 - resetSession: Reset the current session to start fresh
+- openSpawnAgent: Open the dialog to add/spawn a new agent or sub-agent
+- openSettings: Open the settings drawer
+- openWorkspacePanel: Open the workspace panel (mobile compact layout)
+- switchWorkspaceTab: Navigate to a workspace tab: 'memory', 'crons', 'config', or 'kanban'
+- switchConfigView: When on config tab, switch between 'files' and 'skills' sub-views
+- addMemory: Add a memory with text (optional section)
+- addTask: Create a kanban task with title (optional description)
+- openAddCronDialog: Open the dialog to add a new cron job
+- summarizeChat: Ask the agent to summarize the current conversation
 
 ## How to Use:
-- To chat with the agent: Use sendMessage action with your message
-- To switch views: Use switchView action with 'chat' or 'kanban'
-- To stop agent: Use abortGeneration action
-- To start fresh: Use resetSession action
+- To chat: Use sendMessage with your message
+- To switch chat/kanban: Use switchView with 'chat' or 'kanban'
+- To stop agent: Use abortGeneration
+- To start fresh: Use resetSession
+- To add an agent: Use openSpawnAgent
+- To open settings: Use openSettings
+- To show workspace: Use openWorkspacePanel (mobile) or switchWorkspaceTab to navigate tabs
+- To add memory: Use addMemory with text and optional section
+- To add task: Use addTask with title and optional description
+- To add cron: Use openAddCronDialog
+- To summarize: Use summarizeChat
 - **DO NOT use DOM manipulation** unless explicitly required by user
 
 When the user speaks to you, respond conversationally and help them interact with the vowel | Nerve application.`,
@@ -131,7 +158,7 @@ When the user speaks to you, respond conversationally and help them interact wit
         // },
       },
       useServerVad: true,
-      initialGreetingPrompt: `Welcome to vowel | Nerve! I'm your voice assistant. I can help you chat with your OpenClaw agent, switch between chat and kanban views, manage agent tasks, or answer questions about your workspace. You can also ask me to abort the current generation or reset your session. What would you like to do?`
+      initialGreetingPrompt: `Welcome to vowel | Nerve! I'm your voice assistant. I can help you chat with your OpenClaw agent, switch between chat and kanban views, add agents, memories, tasks, or crons, open settings, navigate workspace tabs, or summarize our conversation. You can also ask me to abort the current generation or reset your session. What would you like to do?`
     },
     
     onUserSpeakingChange: (isSpeaking) => {
@@ -216,6 +243,140 @@ function registerCustomActions(vowel: Vowel) {
     try {
       resetHandler();
       return { success: true, message: 'Session reset successfully' };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  vowel.registerAction('openSpawnAgent', {
+    description: 'Open the dialog to add or spawn a new agent or sub-agent',
+    parameters: {}
+  }, async () => {
+    if (!openSpawnAgentHandler) {
+      return { success: false, error: 'Spawn agent handler not initialized' };
+    }
+    openSpawnAgentHandler();
+    return { success: true, message: 'Opened spawn agent dialog' };
+  });
+
+  vowel.registerAction('openSettings', {
+    description: 'Open the settings drawer',
+    parameters: {}
+  }, async () => {
+    if (!openSettingsHandler) {
+      return { success: false, error: 'Settings handler not initialized' };
+    }
+    openSettingsHandler();
+    return { success: true, message: 'Opened settings' };
+  });
+
+  vowel.registerAction('openWorkspacePanel', {
+    description: 'Open the workspace panel (useful in mobile/compact layout)',
+    parameters: {}
+  }, async () => {
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_PANEL, { detail: { panel: 'workspace' } }));
+    return { success: true, message: 'Opened workspace panel' };
+  });
+
+  vowel.registerAction('switchWorkspaceTab', {
+    description: 'Navigate to a workspace tab: memory, crons, config, or kanban',
+    parameters: {
+      tab: { type: 'string', description: 'The tab to switch to: "memory", "crons", "config", or "kanban"' }
+    }
+  }, async ({ tab }) => {
+    const valid = ['memory', 'crons', 'config', 'kanban'];
+    if (!valid.includes(tab)) {
+      return { success: false, error: `Invalid tab. Must be one of: ${valid.join(', ')}` };
+    }
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, { detail: { tab } }));
+    return { success: true, message: `Switched to ${tab} tab` };
+  });
+
+  vowel.registerAction('switchConfigView', {
+    description: 'When on the config tab, switch between files and skills sub-views',
+    parameters: {
+      view: { type: 'string', description: 'The sub-view: "files" or "skills"' }
+    }
+  }, async ({ view }) => {
+    if (view !== 'files' && view !== 'skills') {
+      return { success: false, error: 'Invalid view. Must be "files" or "skills"' };
+    }
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.CONFIG_VIEW_CHANGE, { detail: { view } }));
+    return { success: true, message: `Switched to ${view} view` };
+  });
+
+  vowel.registerAction('addMemory', {
+    description: 'Add a memory with the given text. Optionally specify a section.',
+    parameters: {
+      text: { type: 'string', description: 'The memory content to add' },
+      section: { type: 'string', description: 'Optional section name to place the memory under' }
+    }
+  }, async ({ text, section }) => {
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return { success: false, error: 'Memory text is required' };
+    }
+    try {
+      const res = await fetch('/api/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.trim(), section: section?.trim() || undefined, category: 'other' }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        return { success: false, error: data.error || 'Failed to add memory' };
+      }
+      window.dispatchEvent(new CustomEvent(NERVE_EVENTS.REFRESH_MEMORIES));
+      return { success: true, message: 'Memory added successfully' };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  vowel.registerAction('addTask', {
+    description: 'Create a new kanban task with the given title and optional description',
+    parameters: {
+      title: { type: 'string', description: 'The task title' },
+      description: { type: 'string', description: 'Optional task description' }
+    }
+  }, async ({ title, description }) => {
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return { success: false, error: 'Task title is required' };
+    }
+    try {
+      const res = await fetch('/api/kanban/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim(), description: description?.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        return { success: false, error: body.details || body.error || `HTTP ${res.status}` };
+      }
+      window.dispatchEvent(new CustomEvent(NERVE_EVENTS.REFRESH_KANBAN));
+      return { success: true, message: 'Task created successfully' };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  });
+
+  vowel.registerAction('openAddCronDialog', {
+    description: 'Open the dialog to add a new cron job',
+    parameters: {}
+  }, async () => {
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_ADD_CRON));
+    return { success: true, message: 'Opened add cron dialog' };
+  });
+
+  vowel.registerAction('summarizeChat', {
+    description: 'Ask the agent to summarize the current conversation',
+    parameters: {}
+  }, async () => {
+    if (!sendMessageHandler) {
+      return { success: false, error: 'Message handler not initialized' };
+    }
+    try {
+      await sendMessageHandler('Please summarize our current conversation.');
+      return { success: true, message: 'Asked the agent to summarize the chat' };
     } catch (error) {
       return { success: false, error: String(error) };
     }
