@@ -101,7 +101,7 @@ export function VowelLogoPreview() {
   return (
     <LogoPreviewPage
       title="Vowel Logo Scale Test"
-      description="Blue three-node V-shape variant using the same size calculations, timing, easing, and animation structure as the Nerve preview."
+      description="Blue V-shape variant using LuBrain, IoChatboxOutline, and BsStars as the outer nodes, with an OCR-A lowercase v taking over the center during the fade-and-zoom phase."
       accent="#8cc3ff"
       panelBorder="#5aa2ff30"
       panelBackground="linear-gradient(180deg, rgba(15,24,38,0.94), rgba(10,16,29,0.92))"
