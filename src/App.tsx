@@ -21,7 +21,7 @@ import { StatusBar } from '@/components/StatusBar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ChatPanel, type ChatPanelHandle } from '@/features/chat/ChatPanel';
 import type { TTSProvider } from '@/features/tts/useTTS';
-import type { ViewMode } from '@/features/command-palette/commands';
+import type { ViewMode as AppViewMode } from '@/features/command-palette/commands';
 import { ResizablePanels } from '@/components/ResizablePanels';
 import { getContextLimit } from '@/lib/constants';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -30,6 +30,8 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { SpawnAgentDialog } from '@/features/sessions/SpawnAgentDialog';
 import { FileTreePanel, TabbedContentArea, useOpenFiles } from '@/features/file-browser';
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
+import { VowelProvider, VowelAgent } from '@vowel.to/client/react';
+import { initializeVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
 
 // Lazy-loaded features (not needed in initial bundle)
 const SettingsDrawer = lazy(() => import('@/features/settings/SettingsDrawer').then(m => ({ default: m.SettingsDrawer })));
@@ -201,7 +203,7 @@ export default function App({ onLogout }: AppProps) {
   const [spawnDialogOpen, setSpawnDialogOpen] = useState(false);
 
   // View mode state (chat | kanban), persisted to localStorage
-  const [viewMode, setViewModeRaw] = useState<ViewMode>(() => {
+  const [viewMode, setViewModeRaw] = useState<AppViewMode>(() => {
     try {
       const saved = localStorage.getItem('nerve:viewMode');
       if (saved === 'kanban') return 'kanban';
@@ -209,7 +211,7 @@ export default function App({ onLogout }: AppProps) {
     return 'chat';
   });
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
-  const setViewMode = useCallback((mode: ViewMode) => {
+  const setViewMode = useCallback((mode: AppViewMode) => {
     setViewModeRaw(mode);
 
     if (mode === 'kanban' && isCompactLayout) {
@@ -280,6 +282,53 @@ export default function App({ onLogout }: AppProps) {
     { key: 'c', ctrl: true, handler: handleCtrlC, preventDefault: false },  // Ctrl+C → abort (when generating), allow copy to still work
     { key: 'Escape', handler: handleEscape, skipInEditor: true },
   ]);
+
+  // Vowel voice assistant state
+  const [vowelClient, setVowelClient] = useState<VowelClientType>(getVowel());
+  const appId = import.meta.env.VITE_VOWEL_APP_ID;
+
+  // Set up vowel handlers and initialize
+  useEffect(() => {
+    setAppStateGetter(() => ({
+      viewMode,
+      currentSession,
+      sessions: sessions.map(s => ({ key: getSessionKey(s), label: getSessionDisplayLabel(s, agentName) })),
+      agentName,
+      language: 'en',
+      soundEnabled,
+      wakeWordEnabled,
+    }));
+    setViewModeSetter((mode: AppViewMode) => setViewMode(mode));
+    setSendMessageHandler(async (text: string) => {
+      await handleSend(text);
+    });
+    setAbortHandler(async () => {
+      await handleAbort();
+    });
+    setResetHandler(() => {
+      handleReset();
+    });
+  }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled, handleSend, handleAbort, handleReset, setViewMode]);
+
+  // Initialize vowel client
+  useEffect(() => {
+    if (appId) {
+      initializeVowel(appId);
+    }
+  }, [appId]);
+
+  // Subscribe to vowel changes
+  useEffect(() => {
+    const unsubscribe = subscribeToVowelChanges((client) => {
+      setVowelClient(client);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Update vowel context when app state changes
+  useEffect(() => {
+    updateVowelContext();
+  }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled]);
 
   // Get current session's context usage for StatusBar
   const currentSessionData = useMemo(() => {
@@ -488,7 +537,9 @@ export default function App({ onLogout }: AppProps) {
   const showCompactFileBrowser = isCompactLayout && viewMode !== 'kanban' && !fileBrowserCollapsed;
 
   return (
-    <div className="scan-lines relative h-screen flex flex-col overflow-hidden" data-booted={booted}>
+    <VowelProvider client={vowelClient}>
+      <VowelAgent position="bottom-right" enableFloatingCursor={false} />
+      <div className="scan-lines relative h-screen flex flex-col overflow-hidden" data-booted={booted}>
       {/* Skip to main content link for keyboard navigation */}
       <a 
         href="#main-chat" 
@@ -732,5 +783,6 @@ export default function App({ onLogout }: AppProps) {
         onSpawn={spawnSession}
       />
     </div>
+    </VowelProvider>
   );
 }
