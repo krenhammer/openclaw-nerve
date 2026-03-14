@@ -116,6 +116,8 @@ npm run dev            # frontend — Vite HMR on :3080
 npm run dev:server     # backend — watch mode on :3081
 ```
 
+**HTTPS:** Vite dev server uses [vite-plugin-mkcert](https://github.com/liuweiGL/vite-plugin-mkcert) for trusted local HTTPS (auto-generated certs). Set `VITE_DISABLE_HTTPS=true` to disable.
+
 **Requires:** Node.js 22+ and an [OpenClaw](https://github.com/openclaw/openclaw) gateway.
 
 ## How it works

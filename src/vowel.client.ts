@@ -120,6 +120,17 @@ When the user speaks to you, respond conversationally and help them interact wit
       model: 'openai/gpt-oss-120b',
       voice: 'Timothy',
       language: 'en-US',
+      /** Server-side VAD: no client model download, instant startup, integrated with streaming STT. */
+      turnDetection: {
+        mode: 'server_vad',
+        // serverVAD: {
+        //   threshold: 0.5,
+        //   silenceDurationMs: 550,
+        //   prefixPaddingMs: 0,
+        //   interruptResponse: true,
+        // },
+      },
+      useServerVad: true,
       initialGreetingPrompt: `Welcome to vowel | Nerve! I'm your voice assistant. I can help you chat with your OpenClaw agent, switch between chat and kanban views, manage agent tasks, or answer questions about your workspace. You can also ask me to abort the current generation or reset your session. What would you like to do?`
     },
     
