@@ -21,6 +21,7 @@ const ICONS = [LuBrain, IoChatboxOutline, BsStars] as const;
 
 interface Trail { x: number; y: number; life: number; size: number; }
 interface Ripple { x: number; y: number; life: number; maxR: number; }
+interface Node { x: number; y: number; glow: number; }
 let ocrFontPromise: Promise<void> | null = null;
 const iconCache = new Map<string, Promise<HTMLImageElement>>();
 
@@ -39,8 +40,7 @@ function glowDot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   ctx.shadowBlur = blur;
   ctx.shadowColor = rgba(color, alpha * 0.7);
   ctx.fillStyle = rgba(color, alpha);
-  ctx.beginPath();
-  ctx.arc(x, y, Math.max(r, 0.5), 0, TAU);
+  roundedSquarePath(ctx, x, y, Math.max(r, 0.5));
   ctx.fill();
   ctx.restore();
 }
@@ -162,11 +162,42 @@ function drawWord(
   ctx.restore();
 }
 
-interface VowelLogoProps {
-  size?: number;
+function drawLogoNodes(
+  ctx: CanvasRenderingContext2D,
+  center: Node,
+  outer: Array<Node & { visibility?: number }>,
+  iconImages: HTMLImageElement[],
+  nodeVisibility: number,
+  showNodeShapes: boolean,
+) {
+  if (!showNodeShapes) return;
+
+  outer.forEach(node => dimLine(ctx, center.x, center.y, node.x, node.y, 1.5, 0.4 * nodeVisibilityOf(node, nodeVisibility)));
+  dimDot(ctx, center.x, center.y, NODE_RADIUS, 0.18 + 0.16 * nodeVisibility);
+  outer.forEach(node => dimDot(ctx, node.x, node.y, NODE_RADIUS, 0.12 + 0.3 * nodeVisibilityOf(node, nodeVisibility)));
+
+  outer.forEach((node, index) => {
+    if (node.glow > 0.01) {
+      glowDot(ctx, node.x, node.y, NODE_RADIUS * (1 + node.glow * 0.22), P, node.glow * 0.55 * nodeVisibilityOf(node, nodeVisibility), 18);
+    }
+    drawIcon(ctx, iconImages[index], node.x, node.y, ICON_RADIUS, 0.28 * nodeVisibilityOf(node, nodeVisibility));
+    drawIcon(ctx, iconImages[index], node.x, node.y, ICON_RADIUS * 0.92, 0.95 * nodeVisibilityOf(node, nodeVisibility));
+  });
 }
 
-export default function VowelLogo({ size = 28 }: VowelLogoProps) {
+interface VowelLogoProps {
+  size?: number;
+  reducedMotion?: boolean;
+  isLogo?: boolean;
+  isWord?: boolean;
+}
+
+export default function VowelLogo({
+  size = 28,
+  reducedMotion,
+  isLogo = true,
+  isWord = false,
+}: VowelLogoProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -182,7 +213,7 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
     const bleedCss = (paddedCssSize - size) / 2;
     const pxSize = paddedCssSize * dpr;
     const scale = (size * dpr) / VIEWBOX_SIZE;
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const motionReduced = reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     canvas.width = pxSize;
     canvas.height = pxSize;
@@ -223,6 +254,38 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
       await ensureOcrFont();
       if (cancelled) return;
 
+      function renderStaticWord() {
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, W, W);
+        context.setTransform(scale, 0, 0, scale, bleedCss * dpr, bleedCss * dpr);
+        drawWord(context, center.x, center.y, 'owel', 1, 1, 1);
+      }
+
+      function renderStaticLogo() {
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, W, W);
+        context.setTransform(scale, 0, 0, scale, bleedCss * dpr, bleedCss * dpr);
+        drawLogoNodes(context, center, outer, iconImages, 1, true);
+        drawWord(context, center.x, center.y, '', 1, 0, 1);
+      }
+
+      function renderAnimatedWord(time: number) {
+        const t = (time / 1000) % 3.1;
+        const typeProgress = clamp(t / 1.15);
+        const untypeProgress = clamp((t - 1.6) / 0.95);
+        const typedLetters = Math.max(1, Math.min(5, 1 + Math.floor(ease(typeProgress) * 4.999)));
+        const untypedLetters = Math.max(1, 5 - Math.floor(ease(untypeProgress) * 4.999));
+        const currentWord = 'vowel'.slice(0, t < 1.6 ? typedLetters : untypedLetters);
+        const suffix = currentWord.slice(1);
+        const suffixAlpha = t < 1.6 ? ease(typeProgress) : 1 - ease(untypeProgress);
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.clearRect(0, 0, W, W);
+        context.setTransform(scale, 0, 0, scale, bleedCss * dpr, bleedCss * dpr);
+        drawWord(context, center.x, center.y, suffix, 1, clamp(suffixAlpha), 1);
+        rafId = requestAnimationFrame(renderAnimatedWord);
+      }
+
       function animate(time: number) {
         const t = (time / 1000) % CYCLE;
         const typeProgress = clamp((t - 2.95) / 0.9);
@@ -255,10 +318,8 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
         context.clearRect(0, 0, W, W);
         context.setTransform(scale, 0, 0, scale, bleedCss * dpr, bleedCss * dpr);
 
-        if (showNodeCircles) {
-          animatedOuter.forEach(node => dimLine(context, center.x, center.y, node.x, node.y, 1.5 * S, 0.4 * node.visibility));
-          dimDot(context, center.x, center.y, NODE_RADIUS * S, 0.18 + 0.16 * nodeVisibility);
-          animatedOuter.forEach(node => dimDot(context, node.x, node.y, NODE_RADIUS * S, 0.12 + 0.3 * node.visibility));
+        if (isLogo && showNodeCircles) {
+          drawLogoNodes(context, center, animatedOuter, iconImages, nodeVisibility, true);
         }
 
         center.glow = Math.max(0, center.glow - 0.022);
@@ -275,7 +336,7 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
           const dur = 0.55;
           const p = clamp((t - startTime) / dur);
           const animatedNode = animatedOuter[i];
-          if (p > 0 && p < 1 && animatedNode.visibility > 0.01 && showNodeCircles) {
+          if (isLogo && p > 0 && p < 1 && animatedNode.visibility > 0.01 && showNodeCircles) {
             const ep = ease(p);
             const x = lerp(center.x, animatedNode.x, ep);
             const y = lerp(center.y, animatedNode.y, ep);
@@ -293,7 +354,7 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
           const animatedNode = animatedOuter[ni];
           const startTime = 1.5 + idx * 0.15;
           const p = clamp((t - startTime) / 0.6);
-          if (p > 0 && p < 1 && animatedNode.visibility > 0.01 && showNodeCircles) {
+          if (isLogo && p > 0 && p < 1 && animatedNode.visibility > 0.01 && showNodeCircles) {
             const ep = ease(p);
             const x = lerp(animatedNode.x, center.x, ep);
             const y = lerp(animatedNode.y, center.y, ep);
@@ -315,7 +376,7 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
             nodeVisibilityOf(animatedFrom, nodeVisibility),
             nodeVisibilityOf(animatedTo, nodeVisibility),
           );
-          if (p > 0 && p < 1 && segmentVisibility > 0.01 && showNodeCircles) {
+          if (isLogo && p > 0 && p < 1 && segmentVisibility > 0.01 && showNodeCircles) {
             const ep = ease(p);
             const x = lerp(animatedFrom.x, animatedTo.x, ep);
             const y = lerp(animatedFrom.y, animatedTo.y, ep);
@@ -339,10 +400,10 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
             continue;
           }
           context.save();
-          context.strokeStyle = rgba(P, ripple.life * 0.25 * nodeVisibility * (showNodeCircles ? 1 : 0));
+          context.strokeStyle = rgba(P, ripple.life * 0.25 * nodeVisibility * (isLogo && showNodeCircles ? 1 : 0));
           context.lineWidth = Math.max(1, 1.5 * S * ripple.life);
           context.shadowBlur = 8 * S;
-          context.shadowColor = rgba(P, ripple.life * 0.15 * nodeVisibility * (showNodeCircles ? 1 : 0));
+          context.shadowColor = rgba(P, ripple.life * 0.15 * nodeVisibility * (isLogo && showNodeCircles ? 1 : 0));
           context.beginPath();
           context.arc(ripple.x, ripple.y, (1 - ripple.life) * ripple.maxR, 0, TAU);
           context.stroke();
@@ -356,47 +417,53 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
             trails.splice(i, 1);
             continue;
           }
-          glowDot(context, trail.x, trail.y, trail.size * trail.life, P, trail.life * 0.45 * nodeVisibility * (showNodeCircles ? 1 : 0), 5 * S);
+          glowDot(context, trail.x, trail.y, trail.size * trail.life, P, trail.life * 0.45 * nodeVisibility * (isLogo && showNodeCircles ? 1 : 0), 5 * S);
         }
 
-        if (nodeVisibility > 0.01 && showNodeCircles) {
+        if (isLogo && nodeVisibility > 0.01 && showNodeCircles) {
           if (center.glow > 0.01) {
             glowDot(context, center.x, center.y, NODE_RADIUS * S * (1 + center.glow * 0.25), P, center.glow * 0.45 * nodeVisibility, 28 * S);
           }
-          animatedOuter.forEach((node, index) => {
-            if (node.glow > 0.01) {
-              glowDot(context, node.x, node.y, NODE_RADIUS * S * (1 + node.glow * 0.22), P, node.glow * 0.55 * node.visibility, 18 * S);
-            }
-            drawIcon(context, iconImages[index], node.x, node.y, ICON_RADIUS, 0.28 * node.visibility);
-            drawIcon(context, iconImages[index], node.x, node.y, ICON_RADIUS * 0.92, 0.95 * node.visibility);
-          });
         }
 
         const breathe = 0.03 + 0.02 * Math.sin(time / 1000 * 1.2);
-        if (showNodeCircles) {
+        if (isLogo && showNodeCircles) {
           glowDot(context, center.x, center.y, NODE_RADIUS * 0.52 * S, P, breathe * (0.45 + nodeVisibility * 0.55), 15 * S);
         }
 
-        if (circleRedraw > 0.01) {
+        if (isLogo && circleRedraw > 0.01) {
           glowDot(context, center.x, center.y, NODE_RADIUS * (0.45 + circleRedraw * 0.55), P, 0.3 * circleRedraw, 22 * S);
           dimDot(context, center.x, center.y, NODE_RADIUS * circleRedraw, 0.28 * circleRedraw);
         }
 
-        drawWord(
-          context,
-          center.x,
-          center.y,
-          textVisibility > 0.01 ? suffix : '',
-          1,
-          textVisibility > 0.01 ? textVisibility : 0,
-          textVisibility > 0.01 ? textScale : 1,
-        );
+        if (isWord || isLogo) {
+          drawWord(
+            context,
+            center.x,
+            center.y,
+            textVisibility > 0.01 ? suffix : '',
+            1,
+            textVisibility > 0.01 ? textVisibility : 0,
+            textVisibility > 0.01 ? textScale : 1,
+          );
+        } else {
+          drawWord(context, center.x, center.y, '', 1, 0, 1);
+        }
 
         rafId = requestAnimationFrame(animate);
       }
 
-      if (prefersReducedMotion) {
-        animate(0);
+      if (motionReduced) {
+        if (isWord && !isLogo) {
+          renderStaticWord();
+          return;
+        }
+        renderStaticLogo();
+        return;
+      }
+
+      if (isWord && !isLogo) {
+        renderAnimatedWord(0);
         return;
       }
 
@@ -409,7 +476,7 @@ export default function VowelLogo({ size = 28 }: VowelLogoProps) {
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [size]);
+  }, [size, reducedMotion, isLogo, isWord]);
 
   return (
     <div
