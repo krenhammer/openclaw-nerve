@@ -10,7 +10,7 @@ const VIEWBOX_SIZE = 100;
 const CANVAS_PADDING = 2;
 const NODE_RADIUS = VIEWBOX_SIZE * 0.155;
 const ICON_RADIUS = NODE_RADIUS * 0.74;
-const WORD_FONT_SIZE = VIEWBOX_SIZE * 0.15;
+const WORD_FONT_SIZE = VIEWBOX_SIZE * 0.24;
 const OCR_FONT_FAMILY = 'Vowel OCR A';
 
 const P = [88, 162, 255];
@@ -45,10 +45,16 @@ function glowDot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   ctx.restore();
 }
 
+function roundedSquarePath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  const size = Math.max(r * 2, 1);
+  const radius = Math.max(size * 0.28, 1);
+  ctx.beginPath();
+  ctx.roundRect(x - r, y - r, size, size, radius);
+}
+
 function dimDot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, alpha = 0.5) {
   ctx.fillStyle = rgba(DM, alpha);
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, TAU);
+  roundedSquarePath(ctx, x, y, r);
   ctx.fill();
 }
 
