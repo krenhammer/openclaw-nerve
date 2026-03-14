@@ -27,6 +27,10 @@ export const NERVE_EVENTS = {
   CONFIG_VIEW_CHANGE: 'nerve:config-view-change',
   /** Open the add-cron dialog. */
   OPEN_ADD_CRON: 'nerve:open-add-cron',
+  /** Open the add-memory dialog. */
+  OPEN_ADD_MEMORY: 'nerve:open-add-memory',
+  /** Close or cancel all open dialogs (voice: "close", "cancel", "never mind"). */
+  CLOSE_DIALOG: 'nerve:close-dialog',
   /** Trigger memory list refresh (after add/delete). */
   REFRESH_MEMORIES: 'nerve:refresh-memories',
   /** Trigger kanban refresh (after add task). */

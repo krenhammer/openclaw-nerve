@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { NERVE_EVENTS } from '@/lib/constants';
 import type { KanbanTask } from './types';
 import { useKanban } from './hooks/useKanban';
 import { useProposals } from './hooks/useProposals';
@@ -91,6 +92,16 @@ export function KanbanPanel({ initialTaskId, onInitialTaskConsumed }: KanbanPane
   /* ── Open create dialog ── */
   const openCreateDialog = useCallback(() => {
     setCreateOpen(true);
+  }, []);
+
+  // Listen for Vowel close-dialog (voice: "close", "cancel")
+  useEffect(() => {
+    const handler = () => {
+      setCreateOpen(false);
+      setSelectedTask(null);
+    };
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
   }, []);
 
   return (

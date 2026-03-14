@@ -365,6 +365,19 @@ export default function App({ onLogout }: AppProps) {
     return () => window.removeEventListener(NERVE_EVENTS.REFRESH_MEMORIES, handler);
   }, [refreshMemories]);
 
+  // Listen for Vowel close-dialog (voice: "close", "cancel", "never mind")
+  useEffect(() => {
+    const handler = () => {
+      setSettingsOpen(false);
+      setPaletteOpen(false);
+      setSpawnDialogOpen(false);
+      cancelReset();
+      cancelGatewayRestart();
+    };
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, [cancelReset, cancelGatewayRestart]);
+
   // Get current session's context usage for StatusBar
   const currentSessionData = useMemo(() => {
     return sessions.find(s => getSessionKey(s) === currentSession);

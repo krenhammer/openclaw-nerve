@@ -102,10 +102,12 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - openWorkspacePanel: Open the workspace panel (mobile compact layout)
 - switchWorkspaceTab: Navigate to a workspace tab: 'memory', 'crons', 'config', or 'kanban'
 - switchConfigView: When on config tab, switch between 'files' and 'skills' sub-views
-- addMemory: Add a memory with text (optional section)
+- openAddMemoryDialog: Open the dialog to add a new memory (when user says "add a memory" without content)
+- addMemory: Add a memory with text (optional section) — use when user provides the memory content
 - addTask: Create a kanban task with title (optional description)
 - openAddCronDialog: Open the dialog to add a new cron job
 - summarizeChat: Ask the agent to summarize the current conversation
+- closeDialog: Close or cancel any open dialog (settings, spawn agent, add memory, add cron, create task, confirmations)
 
 ## How to Use:
 - To chat: Use sendMessage with your message
@@ -115,10 +117,11 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - To add an agent: Use openSpawnAgent
 - To open settings: Use openSettings
 - To show workspace: Use openWorkspacePanel (mobile) or switchWorkspaceTab to navigate tabs
-- To add memory: Use addMemory with text and optional section
+- To add memory: Use openAddMemoryDialog when user says "add a memory" without content; use addMemory with text when they provide the content
 - To add task: Use addTask with title and optional description
 - To add cron: Use openAddCronDialog
 - To summarize: Use summarizeChat
+- To close any dialog: Use closeDialog (when user says "close", "cancel", "never mind")
 - **DO NOT use DOM manipulation** unless explicitly required by user
 
 When the user speaks to you, respond conversationally and help them interact with the vowel | Nerve application.`,
@@ -367,6 +370,20 @@ function registerCustomActions(vowel: Vowel) {
     return { success: true, message: 'Opened add cron dialog' };
   });
 
+  vowel.registerAction('openAddMemoryDialog', {
+    description: 'Open the dialog to add a new memory. Use when user says "add a memory" without providing the content.',
+    parameters: {}
+  }, async () => {
+    // Ensure workspace panel is open and memory tab is active so the dialog is visible
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_PANEL, { detail: { panel: 'workspace' } }));
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, { detail: { tab: 'memory' } }));
+    // Defer so MemoryList mounts before we open the dialog
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_ADD_MEMORY));
+    });
+    return { success: true, message: 'Opened add memory dialog' };
+  });
+
   vowel.registerAction('summarizeChat', {
     description: 'Ask the agent to summarize the current conversation',
     parameters: {}
@@ -380,6 +397,14 @@ function registerCustomActions(vowel: Vowel) {
     } catch (error) {
       return { success: false, error: String(error) };
     }
+  });
+
+  vowel.registerAction('closeDialog', {
+    description: 'Close or cancel any open dialog (settings, spawn agent, add memory, add cron, create task, confirmations). Use when user says "close", "cancel", "never mind", etc.',
+    parameters: {}
+  }, async () => {
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.CLOSE_DIALOG));
+    return { success: true, message: 'Closed dialogs' };
   });
 }
 

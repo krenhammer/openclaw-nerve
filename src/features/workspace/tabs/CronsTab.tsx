@@ -271,6 +271,13 @@ export function CronsTab() {
     return () => window.removeEventListener(NERVE_EVENTS.OPEN_ADD_CRON, handler);
   }, [handleAdd]);
 
+  // Listen for Vowel close-dialog (voice: "close", "cancel")
+  useEffect(() => {
+    const handler = () => setDialogOpen(false);
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, []);
+
   const handleEdit = useCallback((job: CronJob) => {
     setDialogMode('edit');
     setEditingJob(job);

@@ -7,6 +7,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Plus, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { NERVE_EVENTS } from '@/lib/constants';
 import { MemoryItem, AddMemoryDialog, ConfirmDeleteDialog, MemoryEditor, useMemories } from '@/features/memory';
 import { MemorySkeletonGroup } from '@/components/skeletons';
 import type { Memory } from '@/types';
@@ -181,6 +182,23 @@ export function MemoryList({ memories: initialMemories, onRefresh, isLoading: in
   }, []);
 
   const openAddDialog = useCallback(() => setAddDialogOpen(true), []);
+
+  // Listen for Vowel-triggered open add memory dialog
+  useEffect(() => {
+    const handler = () => openAddDialog();
+    window.addEventListener(NERVE_EVENTS.OPEN_ADD_MEMORY, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.OPEN_ADD_MEMORY, handler);
+  }, [openAddDialog]);
+
+  // Listen for Vowel close-dialog (voice: "close", "cancel")
+  useEffect(() => {
+    const handler = () => {
+      setAddDialogOpen(false);
+      setDeleteDialogOpen(false);
+    };
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, []);
 
   // If editing, show the editor instead of the list
   if (editingMemory) {

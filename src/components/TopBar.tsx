@@ -174,6 +174,13 @@ export function TopBar({
     return () => window.removeEventListener(NERVE_EVENTS.OPEN_PANEL, handler);
   }, [isPanelAvailable]);
 
+  // Listen for Vowel close-dialog (voice: "close", "cancel") – also close TopBar panels
+  useEffect(() => {
+    const handler = () => setActivePanel(null);
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, []);
+
   const visiblePanel = useMemo<PanelId>(() => {
     if (!activePanel) return null;
     return isPanelAvailable(activePanel) ? activePanel : null;
