@@ -83,14 +83,14 @@ function LogoPreviewPage({
 export function NerveLogoPreview() {
   return (
     <LogoPreviewPage
-      title="Nerve Logo Scale Test"
+      title="vowel | Nerve Logo Scale Test"
       description="Adjust the logo size from 50px to 250px. The node radius and the overall component radius stay proportional while the animation timing remains unchanged."
       accent="#ffb169"
       panelBorder="#ff8c3230"
       panelBackground="rgba(23,28,36,0.9)"
       chromeText="#d3c2ae"
       minorText="#9b8c79"
-      sliderLabel="Adjust Nerve logo size"
+      sliderLabel="Adjust vowel | Nerve logo size"
       sliderAccent="#ff8c32"
       LogoComponent={NerveLogo}
     />

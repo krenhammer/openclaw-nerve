@@ -17,6 +17,7 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { useGatewayRestart } from '@/hooks/useGatewayRestart';
 import { ConnectDialog } from '@/features/connect/ConnectDialog';
 import { TopBar } from '@/components/TopBar';
+import LoadingLogo from '@/components/LoadingLogo';
 import { StatusBar } from '@/components/StatusBar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ChatPanel, type ChatPanelHandle } from '@/features/chat/ChatPanel';
@@ -31,7 +32,8 @@ import { SpawnAgentDialog } from '@/features/sessions/SpawnAgentDialog';
 import { FileTreePanel, TabbedContentArea, useOpenFiles } from '@/features/file-browser';
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
 import { VowelProvider, VowelAgent } from '@vowel.to/client/react';
-import { initializeVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
+import { initializeVowel, clearVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
+import { VOWEL_APP_ID_STORAGE_KEY } from '@/lib/constants';
 
 // Lazy-loaded features (not needed in initial bundle)
 const SettingsDrawer = lazy(() => import('@/features/settings/SettingsDrawer').then(m => ({ default: m.SettingsDrawer })));
@@ -285,7 +287,13 @@ export default function App({ onLogout }: AppProps) {
 
   // Vowel voice assistant state
   const [vowelClient, setVowelClient] = useState<VowelClientType>(getVowel());
-  const appId = import.meta.env.VITE_VOWEL_APP_ID;
+  const appId = (() => {
+    try {
+      const stored = localStorage.getItem(VOWEL_APP_ID_STORAGE_KEY);
+      if (stored) return stored;
+    } catch { /* ignore */ }
+    return import.meta.env.VITE_VOWEL_APP_ID || '';
+  })();
 
   // Set up vowel handlers and initialize
   useEffect(() => {
@@ -310,12 +318,29 @@ export default function App({ onLogout }: AppProps) {
     });
   }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled, handleSend, handleAbort, handleReset, setViewMode]);
 
-  // Initialize vowel client
+  // Initialize vowel client (appId from localStorage or env)
   useEffect(() => {
     if (appId) {
       initializeVowel(appId);
+    } else {
+      clearVowel();
     }
   }, [appId]);
+
+  // Re-initialize when user changes Vowel App ID in settings
+  useEffect(() => {
+    const handler = (e: CustomEvent<string>) => {
+      const newId = (e.detail ?? '').trim();
+      if (newId) {
+        initializeVowel(newId);
+      } else {
+        clearVowel();
+      }
+      setVowelClient(getVowel());
+    };
+    window.addEventListener('nerve:vowel-app-id-changed', handler as EventListener);
+    return () => window.removeEventListener('nerve:vowel-app-id-changed', handler as EventListener);
+  }, []);
 
   // Subscribe to vowel changes
   useEffect(() => {
@@ -472,7 +497,7 @@ export default function App({ onLogout }: AppProps) {
   );
 
   const renderRightPanels = (onSelect: (key: string) => Promise<void> | void) => (
-    <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-xs bg-background">Loading…</div>}>
+    <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background"><LoadingLogo size={36} /></div>}>
       {/* Sessions + Memory stacked vertically */}
       <div className="flex-1 flex flex-col gap-3 min-h-0">
         <div className="shell-panel flex-1 flex flex-col min-h-0 overflow-hidden rounded-[28px]">
@@ -504,7 +529,7 @@ export default function App({ onLogout }: AppProps) {
   );
 
   const compactSessionsPanel = (
-    <Suspense fallback={<div className="p-4 text-muted-foreground text-xs">Loading sessions…</div>}>
+    <Suspense fallback={<div className="p-4 flex items-center justify-center"><LoadingLogo size={28} /></div>}>
       <PanelErrorBoundary name="Sessions">
         <SessionList
           sessions={sessions}
@@ -527,7 +552,7 @@ export default function App({ onLogout }: AppProps) {
   );
 
   const compactWorkspacePanel = (
-    <Suspense fallback={<div className="p-4 text-muted-foreground text-xs">Loading workspace…</div>}>
+    <Suspense fallback={<div className="p-4 flex items-center justify-center"><LoadingLogo size={28} /></div>}>
       <PanelErrorBoundary name="Workspace">
         <WorkspacePanel memories={memories} onRefreshMemories={refreshMemories} memoriesLoading={memoriesLoading} compact onOpenBoard={() => setViewMode('kanban')} onOpenTask={openTaskInBoard} />
       </PanelErrorBoundary>
@@ -703,7 +728,7 @@ export default function App({ onLogout }: AppProps) {
          */}
         {viewMode === 'kanban' && (
           <div className="shell-panel boot-panel flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden rounded-[28px]">
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-xs bg-background">Loading…</div>}>
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background"><LoadingLogo size={36} /></div>}>
               <KanbanPanel initialTaskId={pendingTaskId} onInitialTaskConsumed={() => setPendingTaskId(null)} />
             </Suspense>
           </div>

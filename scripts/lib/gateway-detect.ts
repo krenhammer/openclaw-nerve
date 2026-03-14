@@ -153,7 +153,7 @@ const REQUIRED_HTTP_TOOLS = ['cron', 'gateway'] as const;
 const NERVE_PAIRED_PLATFORM = 'web';
 const NERVE_PAIRED_CLIENT_ID = 'webchat-ui';
 const NERVE_PAIRED_CLIENT_MODE = 'webchat';
-const NERVE_PAIRED_DISPLAY_NAME = 'Nerve UI';
+const NERVE_PAIRED_DISPLAY_NAME = 'vowel | Nerve UI';
 
 /**
  * Patch the OpenClaw gateway config to allow required HTTP tools.

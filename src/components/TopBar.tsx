@@ -20,7 +20,8 @@ import {
 } from "lucide-react";
 import type { ViewMode } from "@/features/command-palette/commands";
 import type { AgentLogEntry, EventEntry, TokenData } from "@/types";
-import NerveLogo from "./NerveLogo";
+import VowelLogo from "./VowelLogo";
+import LoadingLogo from "./LoadingLogo";
 
 const AgentLog = lazy(() =>
   import("@/features/activity/AgentLog").then((m) => ({ default: m.AgentLog })),
@@ -233,16 +234,41 @@ export function TopBar({
       <header className="shell-panel flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-3 py-2 shrink-0 sm:flex-nowrap sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/20 bg-background/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <NerveLogo size={24} />
+            <VowelLogo size={24} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold uppercase tracking-[0.34em] text-primary sm:text-base">
-                Nerve
+              <span className="truncate text-sm font-semibold tracking-[0.34em] text-primary sm:text-base">
+                <a
+                  href="https://vowel.to"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-vowel no-underline text-inherit hover:text-primary"
+                >
+                  vowel
+                </a>
+                <span className="text-muted-foreground/90"> | </span>
+                <a
+                  href="https://nerve.zone"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="uppercase no-underline text-inherit hover:text-primary"
+                >
+                  nerve
+                </a>
               </span>
             </div>
             <div className="hidden xl:block text-[11px] text-muted-foreground/80">
-              OpenClaw Cockpit{" "}
+              Interactive{" "}
+              <a
+                href="https://openclaw.ai/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="no-underline text-inherit hover:text-muted-foreground"
+              >
+                OpenClaw
+              </a>{" "}
+              powered by NERVE
             </div>
           </div>
         </div>
@@ -400,7 +426,9 @@ export function TopBar({
         <div className={panelContentClass}>
           <Suspense
             fallback={
-              <div className="p-4 text-muted-foreground text-xs">Loading…</div>
+              <div className="p-4 flex items-center justify-center">
+                <LoadingLogo size={32} />
+              </div>
             }
           >
             {visiblePanel === "agent-log" && (

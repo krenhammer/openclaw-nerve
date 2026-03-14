@@ -54,11 +54,11 @@ describe('sessionKeys', () => {
   });
 
   it('builds display labels from label, displayName, then root id', () => {
-    expect(getSessionDisplayLabel(session('agent:reviewer:main', { label: 'Reviewer', displayName: 'webchat:reviewer' }), 'Nerve')).toBe('Reviewer');
-    expect(getSessionDisplayLabel(session('agent:reviewer:main', { displayName: 'Reviewer Prime' }), 'Nerve')).toBe('Reviewer Prime');
-    expect(getSessionDisplayLabel(session('agent:reviewer:main', { label: 'Reviewer' }), 'Nerve')).toBe('Reviewer');
-    expect(getSessionDisplayLabel(session('agent:reviewer:main'), 'Nerve')).toBe('Agent reviewer');
-    expect(getSessionDisplayLabel(session('agent:main:main'), 'Nerve')).toBe('Nerve (main)');
+    expect(getSessionDisplayLabel(session('agent:reviewer:main', { label: 'Reviewer', displayName: 'webchat:reviewer' }), 'vowel | Nerve')).toBe('Reviewer');
+    expect(getSessionDisplayLabel(session('agent:reviewer:main', { displayName: 'Reviewer Prime' }), 'vowel | Nerve')).toBe('Reviewer Prime');
+    expect(getSessionDisplayLabel(session('agent:reviewer:main', { label: 'Reviewer' }), 'vowel | Nerve')).toBe('Reviewer');
+    expect(getSessionDisplayLabel(session('agent:reviewer:main'), 'vowel | Nerve')).toBe('Agent reviewer');
+    expect(getSessionDisplayLabel(session('agent:main:main'), 'vowel | Nerve')).toBe('vowel | Nerve (main)');
   });
 
   it('falls back to inferred parent when explicit parentId is outside the current window', () => {

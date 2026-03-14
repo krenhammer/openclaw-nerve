@@ -61,7 +61,7 @@ function buildVowelContext(): Record<string, unknown> {
 function createVowelClient(appId: string): Vowel {
   const vowel = new Vowel({
     appId,
-    instructions: `You are a voice assistant for Nerve, the web interface for OpenClaw AI agents.
+    instructions: `You are a voice assistant for vowel | Nerve, the web interface for OpenClaw AI agents.
 
 ## CRITICAL: Write to App Store, Not DOM
 **MOST IMPORTANT RULE**: When performing actions, you MUST write to the application store/state management system, NOT manipulate the DOM directly. Always use registered actions that modify the app state. The UI will automatically update to reflect state changes.
@@ -72,8 +72,8 @@ Before answering ANY question or performing ANY action, ALWAYS check the <contex
 ## Current Application State:
 The current state is automatically provided in the <context> section. You always have access to the latest state - no need to call any actions to read it.
 
-## About Nerve
-Nerve is a web UI for OpenClaw AI agents. It provides:
+## About vowel | Nerve
+vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - Voice conversations with the AI agent via chat
 - Live workspace file editing with the agent
 - Kanban task board for managing agent tasks
@@ -94,7 +94,7 @@ Nerve is a web UI for OpenClaw AI agents. It provides:
 - To start fresh: Use resetSession action
 - **DO NOT use DOM manipulation** unless explicitly required by user
 
-When the user speaks to you, respond conversationally and help them interact with the Nerve application.`,
+When the user speaks to you, respond conversationally and help them interact with the vowel | Nerve application.`,
     
     floatingCursor: { enabled: false },
     
@@ -120,7 +120,7 @@ When the user speaks to you, respond conversationally and help them interact wit
       model: 'openai/gpt-oss-120b',
       voice: 'Timothy',
       language: 'en-US',
-      initialGreetingPrompt: `Welcome to Nerve! I'm your voice assistant. I can help you chat with your OpenClaw agent, switch between chat and kanban views, manage agent tasks, or answer questions about your workspace. You can also ask me to abort the current generation or reset your session. What would you like to do?`
+      initialGreetingPrompt: `Welcome to vowel | Nerve! I'm your voice assistant. I can help you chat with your OpenClaw agent, switch between chat and kanban views, manage agent tasks, or answer questions about your workspace. You can also ask me to abort the current generation or reset your session. What would you like to do?`
     },
     
     onUserSpeakingChange: (isSpeaking) => {
@@ -217,6 +217,12 @@ export function initializeVowel(appId: string) {
   vowelInstance.updateContext(buildVowelContext());
   console.log('✅ Vowel client initialized with App ID:', appId);
   vowelChangeListeners.forEach(listener => listener(vowelInstance));
+}
+
+/** Clears the Vowel client (e.g. when user removes App ID in settings). */
+export function clearVowel() {
+  vowelInstance = null;
+  vowelChangeListeners.forEach(listener => listener(null));
 }
 
 export function getVowel(): Vowel | null {

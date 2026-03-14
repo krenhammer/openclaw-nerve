@@ -43,6 +43,7 @@ const THEME_LABELS: Record<ThemeName, string> = {
 };
 
 const FONT_LABELS: Record<FontName, string> = {
+  'electrolize': 'Electrolize',
   'instrument-sans': 'Instrument Sans',
   'space-grotesk': 'Space Grotesk',
   'jetbrains-mono': 'JetBrains Mono',

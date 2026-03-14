@@ -2,7 +2,8 @@
  * ImageViewer — Renders image files (png, jpg, svg, etc.) in a centered view.
  */
 
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import LoadingLogo from '@/components/LoadingLogo';
 import type { OpenFile } from './types';
 
 interface ImageViewerProps {
@@ -13,8 +14,7 @@ export function ImageViewer({ file }: ImageViewerProps) {
   if (file.loading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-xs gap-2">
-        <Loader2 className="animate-spin" size={14} />
-        Loading {file.name}...
+        <LoadingLogo size={24} />
       </div>
     );
   }

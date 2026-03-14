@@ -132,7 +132,7 @@ describe('config module', () => {
       expect(logSpy).toHaveBeenCalled();
       const allOutput = logSpy.mock.calls.map(c => c.join(' ')).join('\n');
       expect(allOutput).toContain('1.2.3');
-      expect(allOutput).toContain('Nerve');
+      expect(allOutput).toContain('vowel | Nerve');
       logSpy.mockRestore();
       warnSpy.mockRestore();
     });

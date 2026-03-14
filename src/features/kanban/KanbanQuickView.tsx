@@ -6,6 +6,7 @@
 
 import { useMemo } from 'react';
 import { ArrowRight } from 'lucide-react';
+import LoadingLogo from '@/components/LoadingLogo';
 import type { KanbanTask, TaskStatus } from './types';
 import { COLUMN_LABELS } from './types';
 import { useKanban } from './hooks/useKanban';
@@ -121,7 +122,9 @@ export function KanbanQuickView({ onOpenBoard, onOpenTask }: KanbanQuickViewProp
           <p className="text-[11px] text-destructive px-1.5">{error}</p>
         )}
         {loading && !error && (
-          <p className="px-2 text-[11px] text-muted-foreground/60 animate-pulse">Loading tasks…</p>
+          <div className="flex justify-center py-6">
+            <LoadingLogo size={28} />
+          </div>
         )}
         {!loading && allEmpty && !error && (
           <div className="px-2 py-5 text-center">

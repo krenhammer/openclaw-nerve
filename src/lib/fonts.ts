@@ -1,6 +1,8 @@
-// Font definitions for Nerve UI
+// Font definitions for Vowel UI
+// UI fonts (selectable in settings): Electrolize (default), Instrument Sans, Space Grotesk, JetBrains Mono.
+// Non-UI body text uses Electrolize when not overridden by a selected UI font.
 
-export type FontName = 'instrument-sans' | 'space-grotesk' | 'jetbrains-mono';
+export type FontName = 'electrolize' | 'instrument-sans' | 'space-grotesk' | 'jetbrains-mono';
 
 export interface Font {
   name: FontName;
@@ -10,16 +12,22 @@ export interface Font {
 }
 
 export const fonts: Record<FontName, Font> = {
+  'electrolize': {
+    name: 'electrolize',
+    label: 'Electrolize',
+    family: "'Electrolize', 'Helvetica Neue', Arial, sans-serif",
+    // Loaded via @font-face from /fonts/electrolize/Electrolize-Regular.ttf
+  },
   'instrument-sans': {
     name: 'instrument-sans',
     label: 'Instrument Sans',
-    family: "'Instrument Sans', 'Helvetica Neue', Arial, sans-serif",
+    family: "'Instrument Sans', 'Electrolize', 'Helvetica Neue', Arial, sans-serif",
     googleFontsUrl: 'https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap',
   },
   'space-grotesk': {
     name: 'space-grotesk',
     label: 'Space Grotesk',
-    family: "'Space Grotesk', 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif",
+    family: "'Space Grotesk', 'Electrolize', 'Helvetica Neue', Arial, sans-serif",
     googleFontsUrl: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap',
   },
   'jetbrains-mono': {
@@ -70,5 +78,6 @@ export function applyFont(fontName: FontName): void {
 }
 
 // Initialize fonts used in the default shell before settings hydrate
+// Electrolize is loaded via @font-face; preload Google Fonts for other options
 loadGoogleFont(fonts['instrument-sans'].googleFontsUrl!);
 loadGoogleFont(fonts['jetbrains-mono'].googleFontsUrl!);

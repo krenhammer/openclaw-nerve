@@ -274,7 +274,7 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Nerve logo"
+        aria-label="vowel | Nerve logo"
         style={{
           display: 'block',
           position: 'absolute',

@@ -15,7 +15,7 @@ const httpsConfig = httpsEnabled
   ? { key: readFileSync(keyPath), cert: readFileSync(certPath) }
   : undefined
 
-// Port is configurable via VITE_PORT env var (default: 3080)
+// Port is configurable via VITE_PORT env var (default: 3081)
 const port = parseInt(process.env.VITE_PORT || '3080', 10)
 const apiTarget = `http://localhost:${process.env.PORT || '3081'}`
 

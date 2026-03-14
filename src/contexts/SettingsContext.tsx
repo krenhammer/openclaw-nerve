@@ -50,17 +50,18 @@ function resolveInitialFont(): FontName {
   const hasRefreshedFont = localStorage.getItem(FONT_REFRESH_STORAGE_KEY) === 'true';
 
   if (!hasRefreshedFont) {
-    const shouldAdoptInstrumentSans =
+    const shouldAdoptElectrolize =
       saved === null ||
       saved === 'inter' ||
       saved === 'system' ||
+      saved === 'instrument-sans' ||
       saved === 'jetbrains-mono';
 
     localStorage.setItem(FONT_REFRESH_STORAGE_KEY, 'true');
 
-    if (shouldAdoptInstrumentSans) {
-      localStorage.setItem('oc-font', 'instrument-sans');
-      return 'instrument-sans';
+    if (shouldAdoptElectrolize) {
+      localStorage.setItem('oc-font', 'electrolize');
+      return 'electrolize';
     }
 
     if (saved && fontNames.includes(saved as FontName)) {
@@ -68,7 +69,7 @@ function resolveInitialFont(): FontName {
     }
   }
 
-  return saved && fontNames.includes(saved as FontName) ? saved as FontName : 'instrument-sans';
+  return saved && fontNames.includes(saved as FontName) ? saved as FontName : 'electrolize';
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -105,7 +106,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   });
   const [theme, setThemeState] = useState<ThemeName>(() => {
     const saved = localStorage.getItem('oc-theme') as ThemeName | null;
-    return saved && themeNames.includes(saved) ? saved : 'ayu-dark';
+    return saved && themeNames.includes(saved) ? saved : 'phosphor';
   });
   const [font, setFontState] = useState<FontName>(resolveInitialFont);
   const { speak } = useTTS(soundEnabled, ttsProvider, ttsModel || undefined);

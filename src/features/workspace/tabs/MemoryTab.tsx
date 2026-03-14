@@ -4,6 +4,7 @@
  */
 
 import { lazy, Suspense } from 'react';
+import LoadingLogo from '@/components/LoadingLogo';
 import type { Memory } from '@/types';
 
 const MemoryList = lazy(() => import('@/features/dashboard/MemoryList').then(m => ({ default: m.MemoryList })));
@@ -19,7 +20,7 @@ interface MemoryTabProps {
 /** Workspace tab displaying agent memories with add/refresh actions. */
 export function MemoryTab({ memories, onRefresh, isLoading, compact = false }: MemoryTabProps) {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center text-muted-foreground text-xs p-4">Loading…</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center p-4"><LoadingLogo size={28} /></div>}>
       <MemoryList memories={memories} onRefresh={onRefresh} isLoading={isLoading} hideHeader compact={compact} />
     </Suspense>
   );
