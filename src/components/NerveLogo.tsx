@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 const TAU = Math.PI * 2;
+const VIEWBOX_SIZE = 100;
+const CANVAS_PADDING = 2;
+const NODE_RADIUS = VIEWBOX_SIZE * 0.155;
+const CORE_RADIUS = NODE_RADIUS * 0.5;
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 function easeOut(t: number) { return 1 - Math.pow(1 - t, 3); }
 function ease(t: number) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2; }
@@ -87,22 +91,24 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 2;
-    const PAD = 2.0; // 2x padding so glow never clips at canvas edge
-    const pxSize = size * dpr * PAD;
+    const paddedCssSize = size * CANVAS_PADDING;
+    const bleedCss = (paddedCssSize - size) / 2;
+    const pxSize = paddedCssSize * dpr;
+    const scale = (size * dpr) / VIEWBOX_SIZE;
+
     canvas.width = pxSize;
     canvas.height = pxSize;
-    canvas.style.width = `${size * PAD}px`;
-    canvas.style.height = `${size * PAD}px`;
-    canvas.style.margin = `${-size * (PAD - 1) / 2}px`; // negative margin to keep layout tight
+    canvas.style.width = `${paddedCssSize}px`;
+    canvas.style.height = `${paddedCssSize}px`;
 
     const W = pxSize;
-    const S = W / (size * PAD);
-    const cx = W / 2;
-    const cy = W / 2;
+    const cx = VIEWBOX_SIZE / 2;
+    const cy = VIEWBOX_SIZE / 2;
+    const S = 1;
 
     // Respect prefers-reduced-motion: render a single static frame
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const R = size * 0.31 * S;
+    const R = NODE_RADIUS * 2;
     const CYCLE = 4.2;
 
     const center = { x: cx, y: cy, glow: 0 };
@@ -123,13 +129,15 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
     function animate(time: number) {
       if (!ctx) return;
       const t = (time / 1000) % CYCLE;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, W);
+      ctx.setTransform(scale, 0, 0, scale, bleedCss * dpr, bleedCss * dpr);
 
       // Static structure
       outer.forEach(n => dimLine(ctx, cx, cy, n.x, n.y, 1.5 * S));
       for (let i = 0; i < 6; i++) dimLine(ctx, outer[i].x, outer[i].y, outer[(i+1)%6].x, outer[(i+1)%6].y, 1 * S);
-      dimDot(ctx, cx, cy, 7 * S);
-      outer.forEach(n => dimDot(ctx, n.x, n.y, 4.5 * S));
+      dimDot(ctx, cx, cy, NODE_RADIUS * S);
+      outer.forEach(n => dimDot(ctx, n.x, n.y, NODE_RADIUS * S));
 
       center.glow = Math.max(0, center.glow - 0.022);
       outer.forEach(n => n.glow = Math.max(0, n.glow - 0.022));
@@ -150,8 +158,8 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
           const ep = ease(p);
           const x = lerp(cx, node.x, ep), y = lerp(cy, node.y, ep);
           glowLine(ctx, cx, cy, x, y, 2.5 * S, P, 0.35 * (1 - p * 0.7), 12 * S);
-          glowDot(ctx, x, y, 3.5 * S * (1 - p * 0.2), P, 1, 20 * S);
-          glowDot(ctx, x, y, 1.75 * S, WH, 0.85, 5 * S);
+          glowDot(ctx, x, y, NODE_RADIUS * 0.78 * S * (1 - p * 0.2), P, 1, 20 * S);
+          glowDot(ctx, x, y, CORE_RADIUS * 0.88 * S, WH, 0.85, 5 * S);
           if (Math.random() < 0.6) trails.push({ x: x + (Math.random()-0.5)*3*S, y: y + (Math.random()-0.5)*3*S, life: 0.8, size: 1.5*S });
         }
         if (p >= 0.88) {
@@ -169,8 +177,8 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
           const ep = ease(p);
           const x = lerp(node.x, cx, ep), y = lerp(node.y, cy, ep);
           glowLine(ctx, node.x, node.y, x, y, 2*S, P, 0.3*(1-p*0.5), 10*S);
-          glowDot(ctx, x, y, 3*S, P, 0.9, 16*S);
-          glowDot(ctx, x, y, 1.5*S, WH, 0.7, 4*S);
+          glowDot(ctx, x, y, NODE_RADIUS * 0.67 * S, P, 0.9, 16*S);
+          glowDot(ctx, x, y, CORE_RADIUS * 0.75 * S, WH, 0.7, 4*S);
           if (Math.random() < 0.4) trails.push({ x, y, life: 0.6, size: 1.2*S });
         }
         if (p >= 0.9) center.glow = Math.max(center.glow, 0.6);
@@ -185,7 +193,7 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
           const ep = ease(p);
           const x = lerp(outer[i].x, outer[next].x, ep), y = lerp(outer[i].y, outer[next].y, ep);
           glowLine(ctx, outer[i].x, outer[i].y, x, y, 2*S, P, 0.5*(1-p*0.3), 8*S);
-          glowDot(ctx, x, y, 2.5*S, P, 0.8, 12*S);
+          glowDot(ctx, x, y, NODE_RADIUS * 0.56 * S, P, 0.8, 12*S);
           if (Math.random() < 0.3) trails.push({ x, y, life: 0.5, size: 1*S });
         }
         if (t > (2.5+i*0.12+0.24) && t < (2.5+i*0.12+0.39)) {
@@ -223,19 +231,19 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
 
       // Glowing nodes
       if (center.glow > 0.01) {
-        glowDot(ctx, cx, cy, 7*S*(1+center.glow*0.25), P, center.glow*0.75, 28*S);
-        glowDot(ctx, cx, cy, 3.5*S, WH, center.glow*0.45, 8*S);
+        glowDot(ctx, cx, cy, NODE_RADIUS*S*(1+center.glow*0.25), P, center.glow*0.75, 28*S);
+        glowDot(ctx, cx, cy, CORE_RADIUS*S, WH, center.glow*0.45, 8*S);
       }
       outer.forEach(n => {
         if (n.glow > 0.01) {
-          glowDot(ctx, n.x, n.y, 4.5*S*(1+n.glow*0.25), P, n.glow*0.7, 18*S);
-          glowDot(ctx, n.x, n.y, 2.2*S, WH, n.glow*0.35, 5*S);
+          glowDot(ctx, n.x, n.y, NODE_RADIUS*S*(1+n.glow*0.25), P, n.glow*0.7, 18*S);
+          glowDot(ctx, n.x, n.y, CORE_RADIUS * 0.63 * S, WH, n.glow*0.35, 5*S);
         }
       });
 
       // Ambient breathe
       const breathe = 0.03 + 0.02 * Math.sin(time / 1000 * 1.2);
-      glowDot(ctx, cx, cy, 4*S, P, breathe, 15*S);
+      glowDot(ctx, cx, cy, NODE_RADIUS * 0.58 * S, P, breathe, 15*S);
 
       if (stateRef.current) stateRef.current.rafId = requestAnimationFrame(animate);
     }
@@ -253,5 +261,29 @@ export default function NerveLogo({ size = 28 }: NerveLogoProps) {
     };
   }, [size]);
 
-  return <canvas ref={canvasRef} role="img" aria-label="Nerve logo" style={{ display: 'block' }} />;
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        position: 'relative',
+        overflow: 'visible',
+        flexShrink: 0,
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label="Nerve logo"
+        style={{
+          display: 'block',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
 }
