@@ -6,7 +6,7 @@ import type { TTSProvider } from '@/features/tts/useTTS';
 import type { STTInputMode, STTProvider } from '@/contexts/SettingsContext';
 import { useTTSConfig } from '@/features/tts/useTTSConfig';
 import { VoicePhrasesModal } from './VoicePhrasesModal';
-import { buildPrimaryWakePhrase, VOWEL_APP_ID_STORAGE_KEY } from '@/lib/constants';
+import { VOWEL_APP_ID_STORAGE_KEY } from '@/lib/constants';
 import { shouldDeferEdgeVoiceAutoSwitch } from './audioSettingsUtils';
 
 // ─── Language types ──────────────────────────────────────────────────────────
@@ -445,7 +445,6 @@ export function AudioSettings({
   onToggleWakeWord,
   liveTranscriptionPreview,
   onToggleLiveTranscriptionPreview,
-  agentName = 'Agent',
   section = 'all',
 }: AudioSettingsProps) {
   const models = PROVIDER_MODELS[ttsProvider] || [];
@@ -487,6 +486,7 @@ export function AudioSettings({
   useEffect(() => {
     try {
       const stored = localStorage.getItem(VOWEL_APP_ID_STORAGE_KEY) || envVowelAppId;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- this mirrors persisted/env config into local editable state
       setVowelAppId(stored);
     } catch { /* ignore */ }
   }, [envVowelAppId]);
@@ -521,7 +521,6 @@ export function AudioSettings({
 
   // Track which languages have custom phrases
   const [phrasesStatus, setPhrasesStatus] = useState<Record<string, { configured: boolean }>>({});
-  const [activeWakePhrase, setActiveWakePhrase] = useState('');
   useEffect(() => {
     fetch('/api/voice-phrases/status')
       .then((r) => {
@@ -531,29 +530,6 @@ export function AudioSettings({
       .then(setPhrasesStatus)
       .catch(() => {});
   }, [phrasesModal.open]); // Refetch after modal closes (might have saved)
-
-  useEffect(() => {
-    const lang = langState?.language;
-    if (!lang) return;
-
-    let cancelled = false;
-    fetch(`/api/voice-phrases?lang=${lang}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        const customWake = Array.isArray(data?.wakePhrases)
-          ? data.wakePhrases.map((phrase: string) => phrase.trim()).find(Boolean) || ''
-          : '';
-        setActiveWakePhrase(customWake);
-      })
-      .catch(() => {
-        if (!cancelled) setActiveWakePhrase('');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [langState?.language, phrasesModal.open]);
 
   // Keep language switches lightweight; phrase editing is explicit via the CTA button.
   const handleLanguageChange = useCallback((code: string) => {
@@ -623,11 +599,13 @@ export function AudioSettings({
     }
   }, [config, currentLangInfo?.name, langState?.language, support, updateField]);
 
-  const wakePhraseDisplay = useMemo(() => {
-    const phrase = buildPrimaryWakePhrase(agentName, langState?.language || 'en', activeWakePhrase ? [activeWakePhrase] : undefined);
-    if (!phrase) return `Hey ${agentName}`;
-    return phrase.charAt(0).toUpperCase() + phrase.slice(1);
-  }, [activeWakePhrase, agentName, langState?.language]);
+  const wakePhraseDisplay = 'Hey vowel';
+  const wakePhraseDeactivateDisplay = 'Bye vowel';
+  const [wakeWordSupported] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const speechWindow = window as WindowWithSpeechRecognition;
+    return Boolean(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition);
+  });
 
   return (
     <div className="space-y-4">
@@ -943,12 +921,17 @@ export function AudioSettings({
             )}
             <div className="flex flex-col">
               <span className="text-sm font-medium text-foreground" id="wake-word-label">Wake word</span>
-              <span className="text-xs text-muted-foreground">Say "{wakePhraseDisplay}" to activate.</span>
+              <span className="text-xs text-muted-foreground">
+                {wakeWordSupported
+                  ? `Say "${wakePhraseDisplay}" to activate and "${wakePhraseDeactivateDisplay}" to turn Vowel off.`
+                  : 'Wake word requires browser SpeechRecognition support and is unavailable in this browser.'}
+              </span>
             </div>
           </div>
           <Switch
             checked={wakeWordEnabled}
             onCheckedChange={onToggleWakeWord}
+            disabled={!wakeWordSupported}
             aria-label="Toggle wake word detection"
           />
         </div>

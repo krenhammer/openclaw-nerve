@@ -44,6 +44,7 @@ interface SettingsContextValue {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 const FONT_REFRESH_STORAGE_KEY = 'nerve:font-refresh-20260312';
+const WAKE_WORD_KEY = 'nerve:wakeWordEnabled';
 
 function resolveInitialFont(): FontName {
   const saved = localStorage.getItem('oc-font');
@@ -85,7 +86,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return saved === 'browser' || saved === 'local' || saved === 'hybrid' ? saved : 'hybrid';
   });
   const [sttModel, setSttModelState] = useState(() => localStorage.getItem('oc-stt-model') || 'base');
-  const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
+    try {
+      return localStorage.getItem(WAKE_WORD_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [liveTranscriptionPreview, setLiveTranscriptionPreview] = useState(() => {
     const saved = localStorage.getItem('nerve:liveTranscriptionPreview');
     return saved === 'true'; // Default to disabled (fresh installs)
@@ -216,13 +223,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const handleWakeWordState = useCallback((enabled: boolean, toggle: () => void) => {
-    setWakeWordEnabled(enabled);
+  useEffect(() => {
+    try {
+      localStorage.setItem(WAKE_WORD_KEY, String(wakeWordEnabled));
+    } catch {
+      // ignore storage errors
+    }
+  }, [wakeWordEnabled]);
+
+  const handleWakeWordState = useCallback((_enabled: boolean, toggle: () => void) => {
     wakeWordToggleRef.current = toggle;
   }, []);
 
   const handleToggleWakeWord = useCallback(() => {
-    wakeWordToggleRef.current?.();
+    setWakeWordEnabled((prev) => !prev);
   }, []);
 
   const setPanelRatio = useCallback((ratio: number) => {

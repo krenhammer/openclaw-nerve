@@ -33,6 +33,7 @@ import { FileTreePanel, TabbedContentArea, useOpenFiles } from '@/features/file-
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
 import { VowelProvider } from '@vowel.to/client/react';
 import { VowelCaption } from '@/components/VowelCaption';
+import { VowelWakeController } from '@/components/VowelWakeController';
 import { initializeVowel, clearVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, setOpenSpawnAgentHandler, setOpenSettingsHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
 import { VOWEL_APP_ID_STORAGE_KEY, NERVE_EVENTS } from '@/lib/constants';
 
@@ -52,6 +53,14 @@ interface AppProps {
 }
 
 export default function App({ onLogout }: AppProps) {
+  const renderCountRef = useRef(0);
+  useEffect(() => {
+    renderCountRef.current += 1;
+    console.debug('[AppRender]', {
+      count: renderCountRef.current,
+    });
+  });
+
   // Gateway state
   const {
     connectionState, connectError, reconnectAttempt, model, sparkline,
@@ -79,7 +88,7 @@ export default function App({ onLogout }: AppProps) {
     soundEnabled, toggleSound,
     ttsProvider, ttsModel, setTtsProvider, setTtsModel,
     sttProvider, setSttProvider, sttInputMode, setSttInputMode, sttModel, setSttModel,
-    wakeWordEnabled, handleToggleWakeWord, handleWakeWordState,
+    wakeWordEnabled, handleToggleWakeWord,
     liveTranscriptionPreview, toggleLiveTranscriptionPreview,
     panelRatio, setPanelRatio,
     eventsVisible, logVisible,
@@ -505,7 +514,6 @@ export default function App({ onLogout }: AppProps) {
             lastEventTimestamp={lastEventTimestamp}
             currentToolDescription={currentToolDescription}
             activityLog={activityLog}
-            onWakeWordState={handleWakeWordState}
             onReset={handleReset}
             searchOpen={searchOpen}
             onSearchClose={closeSearch}
@@ -586,6 +594,7 @@ export default function App({ onLogout }: AppProps) {
 
   return (
     <VowelProvider client={vowelClient}>
+      <VowelWakeController wakeWordEnabled={wakeWordEnabled} />
       {/* Vowel captions – real-time speech transcripts when voice session is active */}
       <VowelCaption position="top-center" maxWidth="600px" />
       <div className="scan-lines relative h-screen flex flex-col overflow-hidden" data-booted={booted}>
