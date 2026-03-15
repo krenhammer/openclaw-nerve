@@ -31,6 +31,10 @@ export const NERVE_EVENTS = {
   OPEN_ADD_MEMORY: 'nerve:open-add-memory',
   /** Close or cancel all open dialogs (voice: "close", "cancel", "never mind"). */
   CLOSE_DIALOG: 'nerve:close-dialog',
+  /** Replace or append the current chat input draft without sending. */
+  CHAT_DRAFT_SET: 'nerve:chat-draft-set',
+  /** Send the current chat input draft. */
+  CHAT_DRAFT_SEND: 'nerve:chat-draft-send',
   /** Trigger memory list refresh (after add/delete). */
   REFRESH_MEMORIES: 'nerve:refresh-memories',
   /** Trigger kanban refresh (after add task). */

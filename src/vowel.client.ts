@@ -93,7 +93,9 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 
 ## Available Actions:
 - getAppState: Get current app state including view mode, sessions, settings. Call this FIRST.
-- sendMessage: Send a text message to the AI agent for processing
+- setChatDraft: Write text into the agent chat input without sending it
+- sendChatDraft: Send whatever text is currently in the agent chat input
+- sendMessage: Immediately send a text message to the AI agent for processing. Use this only when the user explicitly asks for an immediate send in the same utterance.
 - switchView: Switch between 'chat' and 'kanban' views
 - abortGeneration: Abort the currently running agent generation
 - resetSession: Reset the current session to start fresh
@@ -110,7 +112,8 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - closeDialog: Close or cancel any open dialog (settings, spawn agent, add memory, add cron, create task, confirmations)
 
 ## How to Use:
-- To chat: Use sendMessage with your message
+- To stage a message for the agent without sending: Use setChatDraft
+- To send the staged agent message: Use sendChatDraft when the user says "send it"
 - To switch chat/kanban: Use switchView with 'chat' or 'kanban'
 - To stop agent: Use abortGeneration
 - To start fresh: Use resetSession
@@ -126,6 +129,24 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 
 ## Memory — CRITICAL
 When the user expresses intent to add a memory (e.g. "add a memory", "I would like to add memory", "I want to add a memory", "add memory", "let me add a memory") but does NOT state the actual content to remember → call openAddMemoryDialog IMMEDIATELY. Do NOT ask "what would you like to remember?" — open the dialog so they can type it. Only use addMemory when the user explicitly states the memory content in the same utterance (e.g. "remember that my favorite color is blue").
+
+## Agent Chat Drafting — CRITICAL
+Do NOT type into or send the agent chat for ordinary conversation with the user.
+
+Only write into the agent chat input when the user explicitly uses one of these lead-ins:
+- "tell the agent to ..."
+- "let's have the agent ..."
+- "have the agent ..."
+
+When one of those lead-ins is present:
+- strip the lead-in
+- call setChatDraft with the remainder
+- do NOT send it yet unless the same utterance also clearly says "send it"
+
+Only transmit the staged chat message when the user explicitly says "send it".
+If the user says "send it", call sendChatDraft and do not rewrite the draft first unless they also dictated a replacement in the same utterance.
+
+Do not use sendMessage for normal voice interactions. Prefer setChatDraft + sendChatDraft.
 
 When the user speaks to you, respond conversationally and help them interact with the vowel | Nerve application.`,
     
@@ -192,7 +213,7 @@ function registerCustomActions(vowel: Vowel) {
   });
 
   vowel.registerAction('sendMessage', {
-    description: 'Send a text message to the AI agent for processing',
+    description: 'Immediately send a text message to the AI agent for processing. Prefer setChatDraft and sendChatDraft for normal voice-controlled drafting.',
     parameters: {
       message: { type: 'string', description: 'The message to send to the agent' }
     }
@@ -206,6 +227,30 @@ function registerCustomActions(vowel: Vowel) {
     } catch (error) {
       return { success: false, error: String(error) };
     }
+  });
+
+  vowel.registerAction('setChatDraft', {
+    description: 'Write text into the current agent chat input without sending it. Use this only when the user explicitly says "tell the agent to", "let\'s have the agent", or "have the agent".',
+    parameters: {
+      message: { type: 'string', description: 'The draft message to place into the chat input' }
+    }
+  }, async ({ message }) => {
+    const text = typeof message === 'string' ? message.trim() : '';
+    if (!text) {
+      return { success: false, error: 'Draft message is required' };
+    }
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.CHAT_DRAFT_SET, {
+      detail: { text, mode: 'replace', focus: true },
+    }));
+    return { success: true, message: 'Drafted message in chat input' };
+  });
+
+  vowel.registerAction('sendChatDraft', {
+    description: 'Send the current contents of the agent chat input. Use this only when the user explicitly says "send it".',
+    parameters: {}
+  }, async () => {
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.CHAT_DRAFT_SEND));
+    return { success: true, message: 'Sent drafted chat message' };
   });
 
   vowel.registerAction('switchView', {

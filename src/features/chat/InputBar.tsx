@@ -5,7 +5,7 @@ import { useTabCompletion } from '@/hooks/useTabCompletion';
 import { useInputHistory } from '@/hooks/useInputHistory';
 import { useSessionContext } from '@/contexts/SessionContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from '@/lib/constants';
+import { MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, NERVE_EVENTS } from '@/lib/constants';
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
 import { compressImage } from './image-compress';
 import type { ImageAttachment } from './types';
@@ -20,6 +20,12 @@ interface InputBarProps {
 
 export interface InputBarHandle {
   focus: () => void;
+}
+
+interface ChatDraftEventDetail {
+  text?: string;
+  mode?: 'replace' | 'append';
+  focus?: boolean;
 }
 
 /** Chat input bar with file attachments, voice input, and model effort selector. */
@@ -253,7 +259,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
     onWakeWordState?.(wakeWordEnabled, toggleWakeWord);
   }, [wakeWordEnabled, toggleWakeWord, onWakeWordState]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!hasActiveSession) {
       indicateMissingSession();
       return;
@@ -282,7 +288,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
     setPendingImages([]);
     setAttachmentError(null);
     clearVoiceError();
-  };
+  }, [clearVoiceError, hasActiveSession, indicateMissingSession, inputHistory, onSend, pendingImages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // IME composition guard: during active CJK composition the browser may
@@ -363,13 +369,50 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
     }
   };
 
-  const handleInput = () => {
+  const handleInput = useCallback(() => {
     if (!inputRef.current) return;
     resetTabCompletion();
     clearVoiceError();
     inputRef.current.style.height = 'auto';
     inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 160) + 'px';
-  };
+  }, [clearVoiceError, resetTabCompletion]);
+
+  useEffect(() => {
+    const handleDraftSet = (event: Event) => {
+      if (!hasActiveSession) {
+        indicateMissingSession();
+        return;
+      }
+
+      const input = inputRef.current;
+      if (!input) return;
+
+      const detail = (event as CustomEvent<ChatDraftEventDetail>).detail ?? {};
+      const incomingText = typeof detail.text === 'string' ? detail.text.trim() : '';
+      const nextValue = detail.mode === 'append' && input.value.trim()
+        ? `${input.value.trimEnd()} ${incomingText}`.trim()
+        : incomingText;
+
+      input.value = nextValue;
+      handleInput();
+
+      if (detail.focus !== false) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    };
+
+    const handleDraftSend = () => {
+      handleSend();
+    };
+
+    window.addEventListener(NERVE_EVENTS.CHAT_DRAFT_SET, handleDraftSet);
+    window.addEventListener(NERVE_EVENTS.CHAT_DRAFT_SEND, handleDraftSend);
+    return () => {
+      window.removeEventListener(NERVE_EVENTS.CHAT_DRAFT_SET, handleDraftSet);
+      window.removeEventListener(NERVE_EVENTS.CHAT_DRAFT_SEND, handleDraftSend);
+    };
+  }, [clearVoiceError, handleSend, handleInput, hasActiveSession, indicateMissingSession]);
 
   return (
     <>
