@@ -76,8 +76,7 @@ export function VowelCaption({
         "fixed z-[100] px-4 py-3 rounded-md shadow-2xl backdrop-blur-xl border",
         "transition-all duration-300 ease-in-out",
         "cursor-pointer hover:scale-[1.02] active:scale-[0.98]",
-        "bg-gray-900/95 text-gray-100 border-gray-700/50",
-        "dark:bg-gray-800/95 dark:text-gray-100 dark:border-gray-600/50",
+        "bg-card/95 text-foreground border-border/50",
         positionClasses[position],
         className,
       )}
@@ -90,12 +89,12 @@ export function VowelCaption({
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5 relative">
           {caption.role === "user" ? (
-            <MessageCircle className="w-4 h-4 text-gray-400" />
+            <MessageCircle className="w-4 h-4 text-muted-foreground" />
           ) : (
-            <Sparkles className="w-4 h-4 text-gray-400" />
+            <Sparkles className="w-4 h-4 text-muted-foreground" />
           )}
           {caption.isStreaming && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-gray-400 rounded-full animate-pulse" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-muted-foreground rounded-full animate-pulse" />
           )}
         </div>
         <div className="flex-1 text-sm leading-relaxed break-words">

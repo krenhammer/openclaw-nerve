@@ -303,14 +303,14 @@ export function TopBar({
         </div>
         {/* View mode toggle */}
         {onViewModeChange && (
-          <div className="order-3 flex w-full items-center gap-2 sm:order-none sm:ml-2 sm:w-auto">
+          <div className="order-3 flex items-center gap-2 sm:order-none sm:ml-2">
             <button
               onClick={() => onViewModeChange("chat")}
               title="Chat View"
               aria-label="Switch to chat view"
               aria-pressed={viewMode === "chat"}
               data-active={viewMode === "chat"}
-              className="shell-chip min-h-10 flex-1 justify-center text-[11px] uppercase tracking-[0.14em] sm:flex-none"
+              className="shell-chip min-h-10 justify-center px-4 text-[11px] uppercase tracking-[0.14em]"
             >
               <MessageSquare size={13} aria-hidden="true" />
               <span>Chat</span>
@@ -321,7 +321,7 @@ export function TopBar({
               aria-label="Switch to tasks view"
               aria-pressed={viewMode === "kanban"}
               data-active={viewMode === "kanban"}
-              className="shell-chip min-h-10 flex-1 justify-center text-[11px] uppercase tracking-[0.14em] sm:flex-none"
+              className="shell-chip min-h-10 justify-center px-4 text-[11px] uppercase tracking-[0.14em]"
             >
               <LayoutGrid size={13} aria-hidden="true" />
               <span>Tasks</span>
