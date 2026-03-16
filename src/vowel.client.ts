@@ -22,6 +22,110 @@ let abortHandler: (() => Promise<void>) | null = null;
 let resetHandler: (() => void) | null = null;
 let openSpawnAgentHandler: (() => void) | null = null;
 let openSettingsHandler: (() => void) | null = null;
+const PENDING_MEMORY_SECTION_KEY = 'nerve:pending-memory-section';
+
+function normalizeMemorySectionName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\b(memories|memory|section|show|me|the|list)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function getMemoryItemsForSection(section: string): Promise<{ section: string; items: string[] } | null> {
+  const res = await fetch('/api/memories');
+  if (!res.ok) {
+    throw new Error(`Failed to fetch memories: ${res.status}`);
+  }
+
+  const memories = await res.json() as Array<{ type?: string; text?: string }>;
+  const normalizedTarget = normalizeMemorySectionName(section);
+  let matchedSection: string | null = null;
+  const items: string[] = [];
+  let collecting = false;
+
+  for (const memory of memories) {
+    if (memory.type === 'section') {
+      const text = typeof memory.text === 'string' ? memory.text.trim() : '';
+      const normalizedSection = normalizeMemorySectionName(text);
+      const isMatch = normalizedSection === normalizedTarget
+        || normalizedSection.includes(normalizedTarget)
+        || normalizedTarget.includes(normalizedSection);
+
+      if (isMatch) {
+        matchedSection = text;
+        collecting = true;
+        continue;
+      }
+
+      if (collecting) break;
+      collecting = false;
+      continue;
+    }
+
+    if (collecting && memory.type === 'item' && typeof memory.text === 'string' && memory.text.trim()) {
+      items.push(memory.text.trim());
+    }
+  }
+
+  if (!matchedSection) return null;
+  return { section: matchedSection, items };
+}
+
+async function getMemorySectionContent(title: string, date?: string): Promise<string> {
+  const params = new URLSearchParams({ title });
+  if (date) params.set('date', date);
+
+  const res = await fetch(`/api/memories/section?${params.toString()}`);
+  const data = await res.json() as { ok?: boolean; content?: string; error?: string };
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `Failed to load memory section: ${res.status}`);
+  }
+
+  return typeof data.content === 'string' ? data.content : '';
+}
+
+async function updateMemorySectionContent(title: string, content: string, date?: string): Promise<void> {
+  const res = await fetch('/api/memories/section', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, content, date }),
+  });
+  const data = await res.json() as { ok?: boolean; error?: string };
+
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `Failed to update memory section: ${res.status}`);
+  }
+}
+
+function replaceMemoryLine(sectionContent: string, oldText: string, newText: string): { content: string; replaced: boolean } {
+  const oldTrimmed = oldText.trim();
+  const newTrimmed = newText.trim();
+  const lines = sectionContent.split('\n');
+  let replaced = false;
+
+  const nextLines = lines.map((line) => {
+    if (replaced) return line;
+
+    const trimmedLine = line.trim();
+    const bulletMatch = /^-\s+(.*)$/.exec(trimmedLine);
+    const lineValue = bulletMatch ? bulletMatch[1].trim() : trimmedLine;
+
+    if (lineValue !== oldTrimmed) return line;
+
+    replaced = true;
+
+    if (bulletMatch) {
+      const indent = line.match(/^\s*/)?.[0] ?? '';
+      return `${indent}- ${newTrimmed}`;
+    }
+
+    return newTrimmed;
+  });
+
+  return { content: nextLines.join('\n'), replaced };
+}
 
 type VowelChangeListener = (client: Vowel | null) => void;
 const vowelChangeListeners = new Set<VowelChangeListener>();
@@ -104,8 +208,13 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - openWorkspacePanel: Open the workspace panel (mobile compact layout)
 - switchWorkspaceTab: Navigate to a workspace tab: 'memory', 'crons', 'config', or 'kanban'
 - switchConfigView: When on config tab, switch between 'files' and 'skills' sub-views
-- openAddMemoryDialog: Open the add-memory dialog. Use when user wants to add a memory but has NOT yet stated what to remember.
-- addMemory: Add a memory with text (optional section) — use ONLY when user provides the memory content in the same utterance
+- openAddMemoryDialog: Open the add-memory dialog, but only when the user explicitly asks to open the dialog.
+- addMemory: Add a memory with text (optional section). Prefer this over opening the dialog.
+- requestMemoryDelete: Open the existing confirmation dialog for deleting a memory. Never delete memory silently.
+- confirmMemoryDelete: Confirm the currently open memory delete dialog and perform the deletion.
+- showMemorySection: Open the memory tab and expand a named memory section.
+- getMemoriesInSection: Read the memories inside a named section such as "General".
+- editMemory: Update an existing memory item inside a section.
 - addTask: Create a kanban task with title (optional description)
 - openAddCronDialog: Open the dialog to add a new cron job
 - summarizeChat: Ask the agent to summarize the current conversation
@@ -120,7 +229,11 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - To add an agent: Use openSpawnAgent
 - To open settings: Use openSettings
 - To show workspace: Use openWorkspacePanel (mobile) or switchWorkspaceTab to navigate tabs
-- To add memory: Use openAddMemoryDialog when user says "add a memory", "I would like to add memory", "I want to add a memory", etc. without stating what to remember; use addMemory only when they say the content (e.g. "remember that X")
+- To add memory: Prefer addMemory directly whenever the user says what to remember. Only use openAddMemoryDialog when they explicitly ask to open the dialog.
+- To delete memory: Use requestMemoryDelete so the UI asks for confirmation before deletion
+- To confirm deletion: Use confirmMemoryDelete when the user says "yes", "confirm", "delete it", or similar while the delete dialog is open
+- To show memories in a section: Use showMemorySection and getMemoriesInSection with the section name
+- To edit a memory: Use editMemory with the section name, current memory text, and replacement text
 - To add task: Use addTask with title and optional description
 - To add cron: Use openAddCronDialog
 - To summarize: Use summarizeChat
@@ -128,7 +241,22 @@ vowel | Nerve is a web UI for OpenClaw AI agents. It provides:
 - **DO NOT use DOM manipulation** unless explicitly required by user
 
 ## Memory — CRITICAL
-When the user expresses intent to add a memory (e.g. "add a memory", "I would like to add memory", "I want to add a memory", "add memory", "let me add a memory") but does NOT state the actual content to remember → call openAddMemoryDialog IMMEDIATELY. Do NOT ask "what would you like to remember?" — open the dialog so they can type it. Only use addMemory when the user explicitly states the memory content in the same utterance (e.g. "remember that my favorite color is blue").
+When the user provides memory content in the same utterance, use addMemory directly. Do NOT open the add-memory dialog unless the user explicitly asks to open the dialog.
+
+If the user asks to delete a memory, use requestMemoryDelete so the existing confirmation dialog opens first. Never delete memory without confirmation.
+
+If the memory delete confirmation dialog is already open and the user confirms with "yes", "confirm", "delete it", or similar, use confirmMemoryDelete.
+
+If the user asks to show or list memories inside a section, use showMemorySection to open and expand that section, and use getMemoriesInSection to read the items inside it.
+
+If the user asks to edit or change a memory item, use editMemory with the section, the current item text, and the new item text.
+
+Examples:
+- "show me general memories" -> showMemorySection(section="General")
+- "show me general memories" -> getMemoriesInSection(section="General")
+- "show me the preferences memories" -> showMemorySection(section="Preferences")
+- "show me the preferences memories" -> getMemoriesInSection(section="Preferences")
+- "change the memory 'prefers dark roast' to 'prefers light roast' in General" -> editMemory(section="General", oldText="prefers dark roast", newText="prefers light roast")
 
 ## Agent Chat Drafting — CRITICAL
 Do NOT type into or send the agent chat for ordinary conversation with the user.
@@ -367,16 +495,14 @@ function registerCustomActions(vowel: Vowel) {
   }
 
   vowel.registerAction('addMemory', {
-    description: 'Add a memory with the given text. Optionally specify a section. If no text provided, opens the add-memory dialog instead.',
+    description: 'Add a memory with the given text. Optionally specify a section. Prefer this over opening the add-memory dialog.',
     parameters: {
       text: { type: 'string', description: 'The memory content to add' },
       section: { type: 'string', description: 'Optional section name to place the memory under' }
     }
   }, async ({ text, section }) => {
     if (!text || typeof text !== 'string' || !text.trim()) {
-      console.log('[Vowel] addMemory called without text → opening add-memory dialog');
-      dispatchOpenAddMemoryDialog();
-      return { success: true, message: 'Opened add memory dialog' };
+      return { success: false, error: 'Memory text is required' };
     }
     try {
       const res = await fetch('/api/memories', {
@@ -437,6 +563,161 @@ function registerCustomActions(vowel: Vowel) {
     console.log('[Vowel] openAddMemoryDialog called');
     dispatchOpenAddMemoryDialog();
     return { success: true, message: 'Opened add memory dialog' };
+  });
+
+  vowel.registerAction('requestMemoryDelete', {
+    description: 'Open the delete confirmation dialog for a memory. Use this when the user asks to delete a memory. Never delete directly without confirmation.',
+    parameters: {
+      text: { type: 'string', description: 'The memory text or section title to delete' },
+      type: { type: 'string', description: 'Optional memory type: "item", "section", or "daily"' },
+      date: { type: 'string', description: 'Optional date for daily memory entries' },
+    }
+  }, async ({ text, type, date }) => {
+    const trimmedText = typeof text === 'string' ? text.trim() : '';
+    if (!trimmedText) {
+      return { success: false, error: 'Memory text is required to request deletion' };
+    }
+
+    const normalizedType = type === 'section' || type === 'daily' || type === 'item'
+      ? type
+      : 'item';
+
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_PANEL, { detail: { panel: 'workspace' } }));
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, { detail: { tab: 'memory' } }));
+    [100, 300, 600].forEach((ms) => {
+      setTimeout(() => window.dispatchEvent(new CustomEvent(NERVE_EVENTS.REQUEST_MEMORY_DELETE, {
+        detail: {
+          text: trimmedText,
+          type: normalizedType,
+          date: typeof date === 'string' ? date.trim() || undefined : undefined,
+        },
+      })), ms);
+    });
+
+    return { success: true, message: 'Opened memory delete confirmation' };
+  });
+
+  vowel.registerAction('confirmMemoryDelete', {
+    description: 'Confirm the currently open memory delete dialog and perform the deletion. Use this only after the user explicitly confirms.',
+    parameters: {}
+  }, async () => {
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.CONFIRM_MEMORY_DELETE));
+    return { success: true, message: 'Confirmed memory deletion' };
+  });
+
+  vowel.registerAction('getMemoriesInSection', {
+    description: 'Read the memory items inside a named section such as "General".',
+    parameters: {
+      section: { type: 'string', description: 'The memory section name to inspect' },
+    }
+  }, async ({ section }) => {
+    const trimmedSection = typeof section === 'string' ? section.trim() : '';
+    if (!trimmedSection) {
+      return { success: false, error: 'Section name is required' };
+    }
+
+    try {
+      const result = await getMemoryItemsForSection(trimmedSection);
+      if (!result) {
+        return { success: false, error: `No memory section found for "${trimmedSection}"` };
+      }
+      return { success: true, section: result.section, items: result.items };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  vowel.registerAction('editMemory', {
+    description: 'Update an existing memory item inside a named section. Use this when the user asks to edit or change a specific memory.',
+    parameters: {
+      section: { type: 'string', description: 'The memory section containing the item, such as "General"' },
+      oldText: { type: 'string', description: 'The current memory text to replace' },
+      newText: { type: 'string', description: 'The new memory text that should replace the current one' },
+      date: { type: 'string', description: 'Optional date for daily memory files' },
+    }
+  }, async ({ section, oldText, newText, date }) => {
+    const trimmedSection = typeof section === 'string' ? section.trim() : '';
+    const trimmedOldText = typeof oldText === 'string' ? oldText.trim() : '';
+    const trimmedNewText = typeof newText === 'string' ? newText.trim() : '';
+    const trimmedDate = typeof date === 'string' ? date.trim() || undefined : undefined;
+
+    if (!trimmedSection) {
+      return { success: false, error: 'Section name is required' };
+    }
+    if (!trimmedOldText) {
+      return { success: false, error: 'Current memory text is required' };
+    }
+    if (!trimmedNewText) {
+      return { success: false, error: 'New memory text is required' };
+    }
+
+    try {
+      const sectionResult = await getMemoryItemsForSection(trimmedSection);
+      if (!sectionResult) {
+        return { success: false, error: `No memory section found for "${trimmedSection}"` };
+      }
+
+      const exactItem = sectionResult.items.find((item) => item === trimmedOldText);
+      const matchedItem = exactItem
+        ?? sectionResult.items.find((item) => item.includes(trimmedOldText) || trimmedOldText.includes(item));
+
+      if (!matchedItem) {
+        return {
+          success: false,
+          error: `No memory matching "${trimmedOldText}" was found in section "${sectionResult.section}"`,
+        };
+      }
+
+      const currentContent = await getMemorySectionContent(sectionResult.section, trimmedDate);
+      const { content: nextContent, replaced } = replaceMemoryLine(currentContent, matchedItem, trimmedNewText);
+      if (!replaced) {
+        return {
+          success: false,
+          error: `Found the memory in "${sectionResult.section}" but could not update the section content`,
+        };
+      }
+
+      await updateMemorySectionContent(sectionResult.section, nextContent, trimmedDate);
+      window.dispatchEvent(new CustomEvent(NERVE_EVENTS.REFRESH_MEMORIES));
+
+      return {
+        success: true,
+        message: `Updated memory in ${sectionResult.section}`,
+        section: sectionResult.section,
+        oldText: matchedItem,
+        newText: trimmedNewText,
+      };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  vowel.registerAction('showMemorySection', {
+    description: 'Open the memory tab and expand a named memory section such as "General".',
+    parameters: {
+      section: { type: 'string', description: 'The memory section name to expand' },
+    }
+  }, async ({ section }) => {
+    const trimmedSection = typeof section === 'string' ? section.trim() : '';
+    if (!trimmedSection) {
+      return { success: false, error: 'Section name is required' };
+    }
+
+    try {
+      localStorage.setItem(PENDING_MEMORY_SECTION_KEY, trimmedSection);
+    } catch {
+      // ignore storage errors
+    }
+
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.OPEN_PANEL, { detail: { panel: 'workspace' } }));
+    window.dispatchEvent(new CustomEvent(NERVE_EVENTS.WORKSPACE_TAB_CHANGE, { detail: { tab: 'memory' } }));
+    [100, 300, 600, 1000].forEach((ms) => {
+      setTimeout(() => window.dispatchEvent(new CustomEvent(NERVE_EVENTS.EXPAND_MEMORY_SECTION, {
+        detail: { section: trimmedSection },
+      })), ms);
+    });
+
+    return { success: true, message: `Opened memory section ${trimmedSection}` };
   });
 
   vowel.registerAction('summarizeChat', {

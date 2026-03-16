@@ -12,6 +12,8 @@ import { MemoryItem, AddMemoryDialog, ConfirmDeleteDialog, MemoryEditor, useMemo
 import { MemorySkeletonGroup } from '@/components/skeletons';
 import type { Memory } from '@/types';
 
+const PENDING_MEMORY_SECTION_KEY = 'nerve:pending-memory-section';
+
 interface MemoryListProps {
   memories: Memory[];
   onRefresh: (signal?: AbortSignal) => void | Promise<void>;
@@ -155,6 +157,7 @@ export function MemoryList({ memories: initialMemories, onRefresh, isLoading: in
           ? 'Daily entry deleted'
           : 'Memory deleted';
       showFeedback('success', msg);
+      setDeleteDialogOpen(false);
       onRefresh();
     } else {
       showFeedback('error', 'Failed to delete memory');
@@ -183,6 +186,58 @@ export function MemoryList({ memories: initialMemories, onRefresh, isLoading: in
 
   const openAddDialog = useCallback(() => setAddDialogOpen(true), []);
 
+  const normalizeSectionRequest = useCallback((value: string) => {
+    return value
+      .toLowerCase()
+      .replace(/\b(memories|memory|section|show|me|the)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const expandRequestedSection = useCallback((requestedSection: string): boolean => {
+    const normalizedRequest = normalizeSectionRequest(requestedSection);
+    if (!normalizedRequest) return false;
+
+    const matchedSection = memories.find((memory) => {
+      if (memory.type !== 'section') return false;
+      const normalizedSection = normalizeSectionRequest(memory.text);
+      return normalizedSection === normalizedRequest
+        || normalizedSection.includes(normalizedRequest)
+        || normalizedRequest.includes(normalizedSection);
+    });
+
+    if (!matchedSection) {
+      console.debug('[MemoryList] No matching memory section found', {
+        requestedSection,
+        normalizedRequest,
+        availableSections: memories
+          .filter((memory) => memory.type === 'section')
+          .map((memory) => memory.text),
+      });
+      return false;
+    }
+
+    console.debug('[MemoryList] Expanding memory section', {
+      requestedSection,
+      matchedSection: matchedSection.text,
+    });
+
+    setExpandedSections((prev) => {
+      if (prev.has(matchedSection.text)) return prev;
+      const next = new Set(prev);
+      next.add(matchedSection.text);
+      return next;
+    });
+
+    try {
+      localStorage.removeItem(PENDING_MEMORY_SECTION_KEY);
+    } catch {
+      // ignore storage errors
+    }
+
+    return true;
+  }, [memories, normalizeSectionRequest]);
+
   // Listen for Vowel-triggered open add memory dialog
   useEffect(() => {
     const handler = () => {
@@ -192,6 +247,57 @@ export function MemoryList({ memories: initialMemories, onRefresh, isLoading: in
     window.addEventListener(NERVE_EVENTS.OPEN_ADD_MEMORY, handler);
     return () => window.removeEventListener(NERVE_EVENTS.OPEN_ADD_MEMORY, handler);
   }, [openAddDialog]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: string; type?: Memory['type']; date?: string }>).detail;
+      if (!detail?.text) return;
+      setMemoryToDelete({
+        text: detail.text,
+        type: detail.type || 'item',
+        date: detail.date,
+      });
+      setDeleteDialogOpen(true);
+    };
+    window.addEventListener(NERVE_EVENTS.REQUEST_MEMORY_DELETE, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.REQUEST_MEMORY_DELETE, handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      if (!deleteDialogOpen || !memoryToDelete || isLoading) return;
+      void handleConfirmDelete();
+    };
+    window.addEventListener(NERVE_EVENTS.CONFIRM_MEMORY_DELETE, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CONFIRM_MEMORY_DELETE, handler);
+  }, [deleteDialogOpen, memoryToDelete, isLoading, handleConfirmDelete]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ section?: string }>).detail;
+      const requestedSection = detail?.section?.trim();
+      if (!requestedSection) return;
+      console.debug('[MemoryList] EXPAND_MEMORY_SECTION received', { requestedSection });
+      expandRequestedSection(requestedSection);
+    };
+
+    window.addEventListener(NERVE_EVENTS.EXPAND_MEMORY_SECTION, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.EXPAND_MEMORY_SECTION, handler);
+  }, [expandRequestedSection]);
+
+  useEffect(() => {
+    try {
+      const pendingSection = localStorage.getItem(PENDING_MEMORY_SECTION_KEY);
+      if (!pendingSection) return;
+      console.debug('[MemoryList] Found pending memory section request', { pendingSection });
+      const timer = window.setTimeout(() => {
+        expandRequestedSection(pendingSection);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    } catch {
+      // ignore storage errors
+    }
+  }, [expandRequestedSection]);
 
   // Listen for Vowel close-dialog (voice: "close", "cancel")
   useEffect(() => {

@@ -29,6 +29,12 @@ export const NERVE_EVENTS = {
   OPEN_ADD_CRON: 'nerve:open-add-cron',
   /** Open the add-memory dialog. */
   OPEN_ADD_MEMORY: 'nerve:open-add-memory',
+  /** Open the memory delete confirmation dialog. */
+  REQUEST_MEMORY_DELETE: 'nerve:request-memory-delete',
+  /** Confirm the currently open memory delete dialog. */
+  CONFIRM_MEMORY_DELETE: 'nerve:confirm-memory-delete',
+  /** Expand a named memory section in the memory tab. */
+  EXPAND_MEMORY_SECTION: 'nerve:expand-memory-section',
   /** Close or cancel all open dialogs (voice: "close", "cancel", "never mind"). */
   CLOSE_DIALOG: 'nerve:close-dialog',
   /** Replace or append the current chat input draft without sending. */
