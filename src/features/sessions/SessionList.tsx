@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import { NERVE_EVENTS } from '@/lib/constants';
 import type { Session } from '@/types';
 import { getSessionKey } from '@/types';
 import type { SpawnSessionOpts } from '@/contexts/SessionContext';
@@ -73,6 +74,16 @@ export function SessionList({ sessions, currentSession, busyState, agentStatus, 
       setDeleteTarget(null);
     }
   }, [deleteTarget, onDelete]);
+
+  // Listen for Vowel close-dialog (voice: "close", "cancel")
+  useEffect(() => {
+    const handler = () => {
+      if (!deleting) setDeleteTarget(null);
+      setSpawnOpen(false);
+    };
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, [deleting]);
 
   const startRename = useCallback((sessionKey: string, currentLabel: string) => {
     setRenamingKey(sessionKey);

@@ -4,10 +4,28 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Brand and body fonts — loaded from public/fonts */
+@font-face {
+  font-family: 'Vowel OCR A';
+  src: url('/fonts/OCR-A_Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Electrolize';
+  src: url('/fonts/electrolize/Electrolize-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Static (non-themeable) tokens */
 @theme {
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  --font-sans: 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Electrolize', 'Instrument Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-vowel: 'Vowel OCR A', 'Electrolize', monospace;
 }
 
 @layer base {
@@ -126,6 +144,11 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/** Brand wordmark font (OCR-A) for "vowel" in header and elsewhere */
+.font-vowel {
+  font-family: var(--font-vowel);
 }
 
 .animate-pulse-dot { animation: pulse-dot 1s infinite; }
@@ -1364,13 +1387,24 @@
   flex-shrink: 0;
 }
 
+/** Vowel mic button – subtle glow when inactive (disconnected) */
+@keyframes vowel-mic-glow {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 35%, transparent); }
+  50% { box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 50%, transparent); }
+}
+
+.vowel-mic-inactive-glow {
+  animation: vowel-mic-glow 2s ease-in-out infinite;
+}
+
 /* Respect user preference for reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-spin,
   .animate-pulse,
   .animate-pulse-dot,
   .animate-blink,
-  .animate-alive {
+  .animate-alive,
+  .vowel-mic-inactive-glow {
     animation: none !important;
   }
 

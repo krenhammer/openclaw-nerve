@@ -7,7 +7,8 @@
  */
 
 import { type ReactNode, lazy, Suspense } from 'react';
-import { Loader2, AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
+import LoadingLogo from '@/components/LoadingLogo';
 import { EditorTabBar } from './EditorTabBar';
 import { ImageViewer } from './ImageViewer';
 import { isImageFile } from './utils/fileTypes';
@@ -19,8 +20,7 @@ const FileEditor = lazy(() => import('./FileEditor'));
 function EditorFallback() {
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-xs gap-2">
-      <Loader2 className="animate-spin" size={14} />
-      Loading editor...
+      <LoadingLogo size={24} />
     </div>
   );
 }

@@ -274,7 +274,7 @@ export function SettingsDrawer({
             </button>
           )}
           <div className="flex items-center justify-between gap-3 px-1 text-[11px] text-muted-foreground/70">
-            <span>OpenClaw Nerve</span>
+            <span>OpenClaw vowel | Nerve</span>
             <span className="font-mono text-[10px] tracking-[0.08em]">v{__APP_VERSION__}</span>
           </div>
         </div>

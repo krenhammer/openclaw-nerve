@@ -1,7 +1,7 @@
 /**
  * AuthGate — guards the app behind authentication when enabled.
  *
- * Shows a loading spinner during auth check, the login page when
+ * Shows the animated Vowel logo during auth check, the login page when
  * unauthenticated, or renders children (the full app) when authenticated.
  */
 import App from '@/App';
@@ -9,6 +9,7 @@ import { GatewayProvider } from '@/contexts/GatewayContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { SessionProvider } from '@/contexts/SessionContext';
 import { ChatProvider } from '@/contexts/ChatContext';
+import LoadingLogo from '@/components/LoadingLogo';
 import { LoginPage } from './LoginPage';
 import { useAuth } from './useAuth';
 
@@ -18,7 +19,7 @@ export function AuthGate() {
   if (state === 'loading') {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="text-xs text-muted-foreground font-mono animate-pulse">Loading…</div>
+        <LoadingLogo size={40} />
       </div>
     );
   }

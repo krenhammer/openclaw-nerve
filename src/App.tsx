@@ -17,11 +17,12 @@ import { useDashboardData } from '@/hooks/useDashboardData';
 import { useGatewayRestart } from '@/hooks/useGatewayRestart';
 import { ConnectDialog } from '@/features/connect/ConnectDialog';
 import { TopBar } from '@/components/TopBar';
+import LoadingLogo from '@/components/LoadingLogo';
 import { StatusBar } from '@/components/StatusBar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ChatPanel, type ChatPanelHandle } from '@/features/chat/ChatPanel';
 import type { TTSProvider } from '@/features/tts/useTTS';
-import type { ViewMode } from '@/features/command-palette/commands';
+import type { ViewMode as AppViewMode } from '@/features/command-palette/commands';
 import { ResizablePanels } from '@/components/ResizablePanels';
 import { getContextLimit } from '@/lib/constants';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -30,6 +31,10 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { SpawnAgentDialog } from '@/features/sessions/SpawnAgentDialog';
 import { FileTreePanel, TabbedContentArea, useOpenFiles } from '@/features/file-browser';
 import { getSessionDisplayLabel } from '@/features/sessions/sessionKeys';
+import { VowelProvider } from '@vowel.to/client/react';
+import { VowelCaption } from '@/components/VowelCaption';
+import { initializeVowel, clearVowel, subscribeToVowelChanges, setAppStateGetter, setViewModeSetter, setSendMessageHandler, setAbortHandler, setResetHandler, setOpenSpawnAgentHandler, setOpenSettingsHandler, updateVowelContext, getVowel, type VowelClientType } from '@/vowel.client';
+import { VOWEL_APP_ID_STORAGE_KEY, NERVE_EVENTS } from '@/lib/constants';
 
 // Lazy-loaded features (not needed in initial bundle)
 const SettingsDrawer = lazy(() => import('@/features/settings/SettingsDrawer').then(m => ({ default: m.SettingsDrawer })));
@@ -201,7 +206,7 @@ export default function App({ onLogout }: AppProps) {
   const [spawnDialogOpen, setSpawnDialogOpen] = useState(false);
 
   // View mode state (chat | kanban), persisted to localStorage
-  const [viewMode, setViewModeRaw] = useState<ViewMode>(() => {
+  const [viewMode, setViewModeRaw] = useState<AppViewMode>(() => {
     try {
       const saved = localStorage.getItem('nerve:viewMode');
       if (saved === 'kanban') return 'kanban';
@@ -209,7 +214,7 @@ export default function App({ onLogout }: AppProps) {
     return 'chat';
   });
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null);
-  const setViewMode = useCallback((mode: ViewMode) => {
+  const setViewMode = useCallback((mode: AppViewMode) => {
     setViewModeRaw(mode);
 
     if (mode === 'kanban' && isCompactLayout) {
@@ -280,6 +285,98 @@ export default function App({ onLogout }: AppProps) {
     { key: 'c', ctrl: true, handler: handleCtrlC, preventDefault: false },  // Ctrl+C → abort (when generating), allow copy to still work
     { key: 'Escape', handler: handleEscape, skipInEditor: true },
   ]);
+
+  // Vowel voice assistant state
+  const [vowelClient, setVowelClient] = useState<VowelClientType>(getVowel());
+  const appId = (() => {
+    try {
+      const stored = localStorage.getItem(VOWEL_APP_ID_STORAGE_KEY);
+      if (stored) return stored;
+    } catch { /* ignore */ }
+    return import.meta.env.VITE_VOWEL_APP_ID || '';
+  })();
+
+  // Set up vowel handlers and initialize
+  useEffect(() => {
+    setAppStateGetter(() => ({
+      viewMode,
+      currentSession,
+      sessions: sessions.map(s => ({ key: getSessionKey(s), label: getSessionDisplayLabel(s, agentName) })),
+      agentName,
+      language: 'en',
+      soundEnabled,
+      wakeWordEnabled,
+    }));
+    setViewModeSetter((mode: AppViewMode) => setViewMode(mode));
+    setSendMessageHandler(async (text: string) => {
+      await handleSend(text);
+    });
+    setAbortHandler(async () => {
+      await handleAbort();
+    });
+    setResetHandler(() => {
+      handleReset();
+    });
+    setOpenSpawnAgentHandler(openSpawnDialog);
+    setOpenSettingsHandler(openSettings);
+  }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled, handleSend, handleAbort, handleReset, setViewMode, openSpawnDialog, openSettings]);
+
+  // Initialize vowel client (appId from localStorage or env)
+  useEffect(() => {
+    if (appId) {
+      initializeVowel(appId);
+    } else {
+      clearVowel();
+    }
+  }, [appId]);
+
+  // Re-initialize when user changes Vowel App ID in settings
+  useEffect(() => {
+    const handler = (e: CustomEvent<string>) => {
+      const newId = (e.detail ?? '').trim();
+      if (newId) {
+        initializeVowel(newId);
+      } else {
+        clearVowel();
+      }
+      setVowelClient(getVowel());
+    };
+    window.addEventListener('nerve:vowel-app-id-changed', handler as EventListener);
+    return () => window.removeEventListener('nerve:vowel-app-id-changed', handler as EventListener);
+  }, []);
+
+  // Subscribe to vowel changes
+  useEffect(() => {
+    const unsubscribe = subscribeToVowelChanges((client) => {
+      setVowelClient(client);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Update vowel context when app state changes
+  useEffect(() => {
+    updateVowelContext();
+  }, [viewMode, currentSession, sessions, agentName, soundEnabled, wakeWordEnabled]);
+
+  // Listen for Vowel-triggered memory refresh (e.g. after addMemory action)
+  useEffect(() => {
+    const handler = () => refreshMemories();
+    window.addEventListener(NERVE_EVENTS.REFRESH_MEMORIES, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.REFRESH_MEMORIES, handler);
+  }, [refreshMemories]);
+
+  // Listen for Vowel close-dialog (voice: "close", "cancel", "never mind")
+  useEffect(() => {
+    const handler = () => {
+      setSettingsOpen(false);
+      setPaletteOpen(false);
+      setSpawnDialogOpen(false);
+      cancelReset();
+      cancelGatewayRestart();
+    };
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, [cancelReset, cancelGatewayRestart]);
 
   // Get current session's context usage for StatusBar
   const currentSessionData = useMemo(() => {
@@ -423,7 +520,7 @@ export default function App({ onLogout }: AppProps) {
   );
 
   const renderRightPanels = (onSelect: (key: string) => Promise<void> | void) => (
-    <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-xs bg-background">Loading…</div>}>
+    <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background"><LoadingLogo size={36} /></div>}>
       {/* Sessions + Memory stacked vertically */}
       <div className="flex-1 flex flex-col gap-3 min-h-0">
         <div className="shell-panel flex-1 flex flex-col min-h-0 overflow-hidden rounded-[28px]">
@@ -455,7 +552,7 @@ export default function App({ onLogout }: AppProps) {
   );
 
   const compactSessionsPanel = (
-    <Suspense fallback={<div className="p-4 text-muted-foreground text-xs">Loading sessions…</div>}>
+    <Suspense fallback={<div className="p-4 flex items-center justify-center"><LoadingLogo size={28} /></div>}>
       <PanelErrorBoundary name="Sessions">
         <SessionList
           sessions={sessions}
@@ -478,7 +575,7 @@ export default function App({ onLogout }: AppProps) {
   );
 
   const compactWorkspacePanel = (
-    <Suspense fallback={<div className="p-4 text-muted-foreground text-xs">Loading workspace…</div>}>
+    <Suspense fallback={<div className="p-4 flex items-center justify-center"><LoadingLogo size={28} /></div>}>
       <PanelErrorBoundary name="Workspace">
         <WorkspacePanel memories={memories} onRefreshMemories={refreshMemories} memoriesLoading={memoriesLoading} compact onOpenBoard={() => setViewMode('kanban')} onOpenTask={openTaskInBoard} />
       </PanelErrorBoundary>
@@ -488,7 +585,10 @@ export default function App({ onLogout }: AppProps) {
   const showCompactFileBrowser = isCompactLayout && viewMode !== 'kanban' && !fileBrowserCollapsed;
 
   return (
-    <div className="scan-lines relative h-screen flex flex-col overflow-hidden" data-booted={booted}>
+    <VowelProvider client={vowelClient}>
+      {/* Vowel captions – real-time speech transcripts when voice session is active */}
+      <VowelCaption position="top-center" maxWidth="600px" />
+      <div className="scan-lines relative h-screen flex flex-col overflow-hidden" data-booted={booted}>
       {/* Skip to main content link for keyboard navigation */}
       <a 
         href="#main-chat" 
@@ -652,7 +752,7 @@ export default function App({ onLogout }: AppProps) {
          */}
         {viewMode === 'kanban' && (
           <div className="shell-panel boot-panel flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden rounded-[28px]">
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-muted-foreground text-xs bg-background">Loading…</div>}>
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center bg-background"><LoadingLogo size={36} /></div>}>
               <KanbanPanel initialTaskId={pendingTaskId} onInitialTaskConsumed={() => setPendingTaskId(null)} />
             </Suspense>
           </div>
@@ -732,5 +832,6 @@ export default function App({ onLogout }: AppProps) {
         onSpawn={spawnSession}
       />
     </div>
+    </VowelProvider>
   );
 }

@@ -19,8 +19,11 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import type { ViewMode } from "@/features/command-palette/commands";
+import { NERVE_EVENTS } from "@/lib/constants";
 import type { AgentLogEntry, EventEntry, TokenData } from "@/types";
-import NerveLogo from "./NerveLogo";
+import VowelLogo from "./VowelLogo";
+import LoadingLogo from "./LoadingLogo";
+import { TopBarVowelMic } from "./TopBarVowelMic";
 
 const AgentLog = lazy(() =>
   import("@/features/activity/AgentLog").then((m) => ({ default: m.AgentLog })),
@@ -159,6 +162,25 @@ export function TopBar({
     ],
   );
 
+  // Listen for Vowel-triggered panel open (e.g. openWorkspacePanel action)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ panel?: PanelId }>).detail;
+      if (detail?.panel && isPanelAvailable(detail.panel)) {
+        setActivePanel(detail.panel);
+      }
+    };
+    window.addEventListener(NERVE_EVENTS.OPEN_PANEL, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.OPEN_PANEL, handler);
+  }, [isPanelAvailable]);
+
+  // Listen for Vowel close-dialog (voice: "close", "cancel") – also close TopBar panels
+  useEffect(() => {
+    const handler = () => setActivePanel(null);
+    window.addEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+    return () => window.removeEventListener(NERVE_EVENTS.CLOSE_DIALOG, handler);
+  }, []);
+
   const visiblePanel = useMemo<PanelId>(() => {
     if (!activePanel) return null;
     return isPanelAvailable(activePanel) ? activePanel : null;
@@ -233,29 +255,62 @@ export function TopBar({
       <header className="shell-panel flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-3 py-2 shrink-0 sm:flex-nowrap sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/20 bg-background/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <NerveLogo size={24} />
+            <VowelLogo size={24} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold uppercase tracking-[0.34em] text-primary sm:text-base">
-                Nerve
+              <span className="truncate text-sm tracking-[0.34em] text-primary sm:text-base">
+                <a
+                  href="https://vowel.to"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-vowel no-underline text-inherit hover:text-primary"
+                >
+                  vowel
+                </a>
+                <span className="text-muted-foreground/90"> | </span>
+                <a
+                  href="https://nerve.zone"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="no-underline text-inherit hover:text-primary"
+                >
+                  nerve
+                </a>
               </span>
             </div>
             <div className="hidden xl:block text-[11px] text-muted-foreground/80">
-              OpenClaw Cockpit{" "}
+              Interactive{" "}
+              <a
+                href="https://openclaw.ai/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className=" text-inherit hover:text-primary"
+              >
+                OpenClaw
+              </a>{" "}
+              powered by {" "}
+              <a
+                  href="https://nerve.zone"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className=" text-inherit hover:text-primary"
+                >
+                  NERVE
+                </a>
             </div>
           </div>
         </div>
         {/* View mode toggle */}
         {onViewModeChange && (
-          <div className="order-3 flex w-full items-center gap-2 sm:order-none sm:ml-2 sm:w-auto">
+          <div className="order-3 flex items-center gap-2 sm:order-none sm:ml-2">
             <button
               onClick={() => onViewModeChange("chat")}
               title="Chat View"
               aria-label="Switch to chat view"
               aria-pressed={viewMode === "chat"}
               data-active={viewMode === "chat"}
-              className="shell-chip min-h-10 flex-1 justify-center text-[11px] uppercase tracking-[0.14em] sm:flex-none"
+              className="shell-chip min-h-10 justify-center px-4 text-[11px] uppercase tracking-[0.14em]"
             >
               <MessageSquare size={13} aria-hidden="true" />
               <span>Chat</span>
@@ -266,7 +321,7 @@ export function TopBar({
               aria-label="Switch to tasks view"
               aria-pressed={viewMode === "kanban"}
               data-active={viewMode === "kanban"}
-              className="shell-chip min-h-10 flex-1 justify-center text-[11px] uppercase tracking-[0.14em] sm:flex-none"
+              className="shell-chip min-h-10 justify-center px-4 text-[11px] uppercase tracking-[0.14em]"
             >
               <LayoutGrid size={13} aria-hidden="true" />
               <span>Tasks</span>
@@ -355,6 +410,9 @@ export function TopBar({
             </button>
           )}
 
+          {/* Vowel mic button - round square, icon changes by state (MicOff/Loader2/Wrench/Brain/Volume2/Mic) */}
+          <TopBarVowelMic />
+
           {/* Usage button */}
           <button
             onClick={() => togglePanel("usage")}
@@ -400,7 +458,9 @@ export function TopBar({
         <div className={panelContentClass}>
           <Suspense
             fallback={
-              <div className="p-4 text-muted-foreground text-xs">Loading…</div>
+              <div className="p-4 flex items-center justify-center">
+                <LoadingLogo size={32} />
+              </div>
             }
           >
             {visiblePanel === "agent-log" && (

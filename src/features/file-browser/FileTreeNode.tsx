@@ -1,4 +1,5 @@
-import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
+import LoadingLogo from '@/components/LoadingLogo';
 import { FileIcon, FolderIcon } from './utils/fileIcons';
 import { isImageFile } from './utils/fileTypes';
 import type { TreeEntry } from './types';
@@ -111,7 +112,7 @@ export function FileTreeNode({
         {/* Expand/collapse chevron for directories */}
         {isDir ? (
           isLoading ? (
-            <Loader2 className="shrink-0 animate-spin text-muted-foreground" size={12} />
+            <LoadingLogo size={14} className="shrink-0" />
           ) : isExpanded ? (
             <ChevronDown className="shrink-0 text-muted-foreground" size={12} />
           ) : (

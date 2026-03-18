@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Volume2, VolumeX, Mic, MicOff, Download, AlertTriangle, KeyRound, Globe } from 'lucide-react';
+import { Volume2, VolumeX, Mic, MicOff, Download, AlertTriangle, KeyRound, Globe, Eye, EyeOff, X } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { InlineSelect } from '@/components/ui/InlineSelect';
 import type { TTSProvider } from '@/features/tts/useTTS';
 import type { STTInputMode, STTProvider } from '@/contexts/SettingsContext';
 import { useTTSConfig } from '@/features/tts/useTTSConfig';
 import { VoicePhrasesModal } from './VoicePhrasesModal';
-import { buildPrimaryWakePhrase } from '@/lib/constants';
+import { buildPrimaryWakePhrase, VOWEL_APP_ID_STORAGE_KEY } from '@/lib/constants';
 import { shouldDeferEdgeVoiceAutoSwitch } from './audioSettingsUtils';
 
 // ─── Language types ──────────────────────────────────────────────────────────
@@ -46,6 +46,9 @@ const EDGE_ENGLISH_VOICE_OPTIONS: EdgeVoiceOption[] = [
   { value: 'en-AU-NatashaNeural', label: 'Natasha (AU)' },
   { value: 'en-IE-EmilyNeural', label: 'Emily (IE)' },
 ];
+
+/** When false, hides the Text-to-Speech and Speech-to-Text configuration sections. */
+const SHOW_TTS_STT_SECTIONS = false;
 
 const INLINE_SELECT_TRIGGER_CLASS =
   'min-h-11 w-full justify-between rounded-2xl border-border/80 bg-background/65 px-3 py-2 text-left text-sm font-sans text-foreground sm:w-auto';
@@ -471,6 +474,43 @@ export function AudioSettings({
       .catch(() => {});
   }, []);
 
+  // Vowel App ID — prefilled from env (VITE_VOWEL_APP_ID) when present
+  const envVowelAppId = (import.meta.env.VITE_VOWEL_APP_ID as string) || '';
+  const [showVowelKey, setShowVowelKey] = useState(false);
+  const [vowelAppId, setVowelAppId] = useState(() => {
+    try {
+      return localStorage.getItem(VOWEL_APP_ID_STORAGE_KEY) || envVowelAppId;
+    } catch {
+      return envVowelAppId;
+    }
+  });
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(VOWEL_APP_ID_STORAGE_KEY) || envVowelAppId;
+      setVowelAppId(stored);
+    } catch { /* ignore */ }
+  }, [envVowelAppId]);
+  const handleVowelAppIdChange = useCallback((value: string) => {
+    setVowelAppId(value);
+    try {
+      if (value) {
+        localStorage.setItem(VOWEL_APP_ID_STORAGE_KEY, value);
+      } else {
+        localStorage.removeItem(VOWEL_APP_ID_STORAGE_KEY);
+      }
+    } catch { /* ignore */ }
+  }, []);
+  const handleVowelAppIdBlur = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('nerve:vowel-app-id-changed', { detail: vowelAppId }));
+  }, [vowelAppId]);
+  const handleVowelAppIdClear = useCallback(() => {
+    setVowelAppId('');
+    try {
+      localStorage.removeItem(VOWEL_APP_ID_STORAGE_KEY);
+      window.dispatchEvent(new CustomEvent('nerve:vowel-app-id-changed', { detail: '' }));
+    } catch { /* ignore */ }
+  }, []);
+
   // Voice phrases modal — opens when switching to non-English without configured phrases
   const [phrasesModal, setPhrasesModal] = useState<{
     open: boolean;
@@ -711,8 +751,47 @@ export function AudioSettings({
         </div>
       )}
 
-      {/* TTS Provider */}
-      {showOutput && (
+      {/* Vowel App ID — prefilled from VITE_VOWEL_APP_ID when present */}
+      <label className="cockpit-field">
+        <span className="cockpit-field-label">Vowel App ID</span>
+        <div className="relative flex gap-1">
+          <input
+            type={showVowelKey ? 'text' : 'password'}
+            value={vowelAppId}
+            onChange={e => handleVowelAppIdChange(e.target.value)}
+            onBlur={handleVowelAppIdBlur}
+            spellCheck={false}
+            className="cockpit-input cockpit-input-mono flex-1 pr-24"
+            placeholder="Paste your Vowel App ID from vowel.to"
+          />
+          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-0.5">
+            {vowelAppId && (
+              <button
+                type="button"
+                onClick={handleVowelAppIdClear}
+                className="cockpit-toolbar-button min-h-8 px-2.5"
+                title="Clear"
+                aria-label="Clear Vowel App ID"
+              >
+                <X size={14} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowVowelKey(!showVowelKey)}
+              className="cockpit-toolbar-button min-h-8 px-2.5"
+              title={showVowelKey ? 'Hide' : 'Show'}
+              aria-label={showVowelKey ? 'Hide Vowel App ID' : 'Show Vowel App ID'}
+            >
+              {showVowelKey ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+        </div>
+        <span className="cockpit-field-hint">Get your App ID from https://vowel.to to enable the voice assistant.</span>
+      </label>
+
+      {/* TTS Provider — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showOutput && (
         <div className="space-y-2">
           <span className="cockpit-field-label">TTS Provider</span>
           <div className="flex gap-2">
@@ -757,16 +836,16 @@ export function AudioSettings({
         </div>
       )}
 
-      {/* TTS API key input */}
-      {showOutput && ttsProvider === 'openai' && !apiKeys.openai && (
+      {/* TTS API key input — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showOutput && ttsProvider === 'openai' && !apiKeys.openai && (
         <ApiKeyInput keyName="OPENAI_API_KEY" provider="OpenAI TTS" fieldName="openaiKey" onSaved={() => setApiKeys(k => ({ ...k, openai: true }))} />
       )}
-      {showOutput && ttsProvider === 'replicate' && !apiKeys.replicate && (
+      {SHOW_TTS_STT_SECTIONS && showOutput && ttsProvider === 'replicate' && !apiKeys.replicate && (
         <ApiKeyInput keyName="REPLICATE_API_TOKEN" provider="Replicate TTS" fieldName="replicateToken" onSaved={() => setApiKeys(k => ({ ...k, replicate: true }))} />
       )}
 
-      {/* TTS Model (shown when provider has multiple models) */}
-      {showOutput && models.length > 0 && (
+      {/* TTS Model (shown when provider has multiple models) — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showOutput && models.length > 0 && (
         <div className="cockpit-row items-start justify-between">
           <div className="min-w-0 flex-1">
             <span className="text-sm font-medium text-foreground">TTS model</span>
@@ -783,8 +862,8 @@ export function AudioSettings({
         </div>
       )}
 
-      {/* Voice Config */}
-      {showOutput && config && (
+      {/* Voice Config — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showOutput && config && (
         <div className="space-y-3">
           {saved && (
             <div className="cockpit-note border-green/25 bg-green/8 text-green">
@@ -875,8 +954,8 @@ export function AudioSettings({
         </div>
       )}
 
-      {/* Speech-to-Text */}
-      {showInput && (
+      {/* Speech-to-Text — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showInput && (
         <div className="space-y-1.5 pt-2">
           <span className="cockpit-kicker">
             <span className="text-primary">◆</span>
@@ -885,7 +964,7 @@ export function AudioSettings({
         </div>
       )}
 
-      {showInput && (
+      {SHOW_TTS_STT_SECTIONS && showInput && (
         <div className="space-y-2">
           <span className="cockpit-field-label">STT Provider</span>
           <div className="flex gap-2">
@@ -916,12 +995,12 @@ export function AudioSettings({
         </div>
       )}
 
-      {/* STT Model selector (only for local provider) */}
-      {showInput && sttProvider === 'local' && (
+      {/* STT Model selector (only for local provider) — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showInput && sttProvider === 'local' && (
         <SttModelSelector model={sttModel} onModelChange={onSttModelChange} />
       )}
 
-      {showInput && sttProvider === 'local' && (
+      {SHOW_TTS_STT_SECTIONS && showInput && sttProvider === 'local' && (
         <div className="space-y-2">
           <div className="cockpit-row items-start justify-between">
             <div className="flex min-w-0 flex-1 flex-col">
@@ -951,7 +1030,7 @@ export function AudioSettings({
         </div>
       )}
 
-      {showInput && (
+      {SHOW_TTS_STT_SECTIONS && showInput && (
         <div className="cockpit-row items-start justify-between">
           <div className="flex items-center gap-3">
             <Mic size={14} className={liveTranscriptionPreview ? 'text-primary' : 'text-muted-foreground'} aria-hidden="true" />
@@ -968,8 +1047,8 @@ export function AudioSettings({
         </div>
       )}
 
-      {/* STT API key input */}
-      {showInput && sttProvider === 'openai' && !apiKeys.openai && (
+      {/* STT API key input — hidden when SHOW_TTS_STT_SECTIONS is false */}
+      {SHOW_TTS_STT_SECTIONS && showInput && sttProvider === 'openai' && !apiKeys.openai && (
         <ApiKeyInput keyName="OPENAI_API_KEY" provider="OpenAI Whisper" fieldName="openaiKey" onSaved={() => setApiKeys(k => ({ ...k, openai: true }))} />
       )}
 

@@ -12,7 +12,8 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLi
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { bracketMatching, foldGutter } from '@codemirror/language';
-import { Loader2, AlertTriangle, RotateCw, LockKeyhole } from 'lucide-react';
+import { AlertTriangle, RotateCw, LockKeyhole } from 'lucide-react';
+import LoadingLogo from '@/components/LoadingLogo';
 import { nerveTheme, nerveHighlighting } from './editorTheme';
 import { getLanguageExtension, shouldWrap } from './utils/languageMap';
 import type { OpenFile } from './types';
@@ -154,8 +155,7 @@ export function FileEditor({ file, onContentChange, onSave, onRetry }: FileEdito
   if (file.loading) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-xs gap-2">
-        <Loader2 className="animate-spin" size={14} />
-        Loading {file.name}...
+        <LoadingLogo size={24} />
       </div>
     );
   }

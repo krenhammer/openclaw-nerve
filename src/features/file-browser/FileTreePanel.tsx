@@ -7,6 +7,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { PanelLeftClose, RefreshCw, Pencil, Trash2, RotateCcw, X } from 'lucide-react';
+import LoadingLogo from '@/components/LoadingLogo';
 import { FileTreeNode } from './FileTreeNode';
 import { useFileTree } from './hooks/useFileTree';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -586,9 +587,8 @@ export function FileTreePanel({
         {/* Tree content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-1" role="tree" aria-label="File explorer">
           {loading ? (
-            <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
-              <RefreshCw className="animate-spin" size={12} />
-              Loading...
+            <div className="flex items-center justify-center px-3 py-6">
+              <LoadingLogo size={28} />
             </div>
           ) : error ? (
             <div className="px-3 py-4 text-xs text-destructive">

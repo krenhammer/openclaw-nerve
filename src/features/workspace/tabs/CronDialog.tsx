@@ -508,7 +508,7 @@ export function CronDialog({ open, onClose, onSubmit, mode, initialData }: CronD
               <SectionShell
                 eyebrow="Delivery"
                 title="What happens after it finishes"
-                description="Choose whether the result stays in Nerve or gets sent out."
+                description="Choose whether the result stays in vowel | Nerve or gets sent out."
               >
                 <div className="flex flex-col gap-1">
                   <span className="cockpit-field-label">Result handling</span>
@@ -518,7 +518,7 @@ export function CronDialog({ open, onClose, onSubmit, mode, initialData }: CronD
                     aria-label="Delivery mode"
                   >
                     <option value="announce">Send result to a channel</option>
-                    <option value="none">Keep it inside Nerve</option>
+                    <option value="none">Keep it inside vowel | Nerve</option>
                   </CronSelect>
                 </div>
 
@@ -532,7 +532,7 @@ export function CronDialog({ open, onClose, onSubmit, mode, initialData }: CronD
                   <div className="space-y-2.5">
                     {availableChannels.length === 0 ? (
                       <div className="rounded-[18px] border border-orange/30 bg-orange/6 px-3 py-3 text-[11px] text-orange/85">
-                        No messaging channels are configured yet. Set one up in OpenClaw first, or keep the job inside Nerve.
+                        No messaging channels are configured yet. Set one up in OpenClaw first, or keep the job inside vowel | Nerve.
                       </div>
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -563,7 +563,7 @@ export function CronDialog({ open, onClose, onSubmit, mode, initialData }: CronD
                       </div>
                     )}
                     <div className="cockpit-note" data-tone="primary">
-                      Nerve appends the delivery instruction so the agent can send the result directly when it finishes.
+                      vowel | Nerve appends the delivery instruction so the agent can send the result directly when it finishes.
                     </div>
                   </div>
                 )}

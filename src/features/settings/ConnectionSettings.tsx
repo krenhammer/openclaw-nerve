@@ -106,6 +106,7 @@ export function ConnectionSettings({
         </div>
         <span className="cockpit-field-hint">Leave blank for unsecured local development.</span>
       </label>
+
       {/* Gateway Service */}
       {onGatewayRestart && (
         <>
