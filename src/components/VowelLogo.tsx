@@ -228,7 +228,7 @@ export default function VowelLogo({
     const cy = VIEWBOX_SIZE / 2;
     const S = 1;
     const R = NODE_RADIUS * 2;
-    const CYCLE = 5.7;
+    const CYCLE = 7.35;
 
     const center = { x: cx, y: cy, glow: 0 };
     const outer = [
@@ -270,14 +270,14 @@ export default function VowelLogo({
       }
 
       function renderAnimatedWord(time: number) {
-        const t = (time / 1000) % 3.1;
+        const t = (time / 1000) % 4.65;
         const typeProgress = clamp(t / 1.15);
-        const untypeProgress = clamp((t - 1.6) / 0.95);
+        const untypeProgress = clamp((t - 3.15) / 0.95);
         const typedLetters = Math.max(1, Math.min(5, 1 + Math.floor(ease(typeProgress) * 4.999)));
         const untypedLetters = Math.max(1, 5 - Math.floor(ease(untypeProgress) * 4.999));
-        const currentWord = 'vowel'.slice(0, t < 1.6 ? typedLetters : untypedLetters);
+        const currentWord = 'vowel'.slice(0, t < 3.15 ? typedLetters : untypedLetters);
         const suffix = currentWord.slice(1);
-        const suffixAlpha = t < 1.6 ? ease(typeProgress) : 1 - ease(untypeProgress);
+        const suffixAlpha = t < 3.15 ? ease(typeProgress) : 1 - ease(untypeProgress);
 
         context.setTransform(1, 0, 0, 1, 0, 0);
         context.clearRect(0, 0, W, W);
@@ -289,13 +289,13 @@ export default function VowelLogo({
       function animate(time: number) {
         const t = (time / 1000) % CYCLE;
         const typeProgress = clamp((t - 2.95) / 0.9);
-        const untypeProgress = clamp((t - 4.1) / 0.75);
+        const untypeProgress = clamp((t - 5.85) / 0.75);
         const textVisibility = clamp(ease(typeProgress) - ease(untypeProgress));
         const textScale = 1;
-        const circleRedraw = ease(clamp((t - 4.95) / 0.42));
+        const circleRedraw = ease(clamp((t - 6.6) / 0.42));
         const typedLetters = Math.max(1, Math.min(5, 1 + Math.floor(ease(typeProgress) * 4.999)));
         const untypedLetters = Math.max(1, 5 - Math.floor(ease(untypeProgress) * 4.999));
-        const currentWord = 'vowel'.slice(0, t < 4.1 ? typedLetters : untypedLetters);
+        const currentWord = 'vowel'.slice(0, t < 5.85 ? typedLetters : untypedLetters);
         const suffix = currentWord.slice(1);
         const animatedOuter = outer.map((node, i) => {
           const enterStart = 0.1 + i * 0.12;
